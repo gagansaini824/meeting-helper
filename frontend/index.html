@@ -92,6 +92,12 @@
             justify-content: space-between;
             padding: 1rem;
             border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .overlay-header:hover {
+            background: var(--bg-tertiary);
         }
         
         .header-left {
@@ -753,6 +759,7 @@
 
             .overlay-content {
                 padding: 0.75rem;
+                padding-bottom: max(1rem, env(safe-area-inset-bottom));
                 display: block;
             }
 
@@ -773,18 +780,6 @@
             .question-input-box button {
                 padding: 0.625rem 1rem;
                 font-size: 0.8125rem;
-            }
-
-            .overlay-footer {
-                padding: 0.75rem;
-                padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-                background: var(--bg-secondary);
-                border-top: 1px solid var(--border);
-            }
-
-            .main-btn {
-                padding: 0.75rem;
-                font-size: 0.875rem;
             }
 
             .docs-panel {
@@ -934,7 +929,7 @@
     
     <!-- Floating Overlay -->
     <div class="overlay" id="overlay">
-        <div class="overlay-header">
+        <div class="overlay-header" id="overlayHeader">
             <div class="header-left">
                 <div class="mic-indicator" id="micIndicator">
                     <svg class="icon" viewBox="0 0 24 24" id="micIcon">
@@ -1055,10 +1050,6 @@
                 <div class="transcript-box hidden" id="transcriptBox"></div>
             </div>
         </div>
-        
-        <div class="overlay-footer">
-            <button class="main-btn btn-start" id="mainBtn">Start Listening</button>
-        </div>
     </div>
 
     <script>
@@ -1075,10 +1066,10 @@
         
         // DOM elements
         const overlay = document.getElementById('overlay');
+        const overlayHeader = document.getElementById('overlayHeader');
         const micIndicator = document.getElementById('micIndicator');
         const liveDot = document.getElementById('liveDot');
         const statusText = document.getElementById('statusText');
-        const mainBtn = document.getElementById('mainBtn');
         const docsBtn = document.getElementById('docsBtn');
         const minimizeBtn = document.getElementById('minimizeBtn');
         const docsPanel = document.getElementById('docsPanel');
@@ -1260,17 +1251,11 @@
             if (isListening) {
                 micIndicator.classList.add('active');
                 liveDot.classList.remove('hidden');
-                statusText.textContent = 'Listening...';
-                mainBtn.textContent = 'Stop Listening';
-                mainBtn.classList.remove('btn-start');
-                mainBtn.classList.add('btn-stop');
+                statusText.textContent = 'Listening... (Click to stop)';
             } else {
                 micIndicator.classList.remove('active');
                 liveDot.classList.add('hidden');
                 statusText.textContent = 'Click to start';
-                mainBtn.textContent = 'Start Listening';
-                mainBtn.classList.remove('btn-stop');
-                mainBtn.classList.add('btn-start');
             }
         }
         
@@ -1489,14 +1474,18 @@
         }
         
         // Event listeners
-        mainBtn.onclick = () => {
+        overlayHeader.onclick = (e) => {
+            // Prevent triggering when clicking on buttons in header
+            if (e.target.closest('.header-actions')) {
+                return;
+            }
             if (isListening) {
                 stopListening();
             } else {
                 startListening();
             }
         };
-        
+
         docsBtn.onclick = () => {
             showDocs = !showDocs;
             docsPanel.classList.toggle('hidden', !showDocs);
