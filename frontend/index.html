@@ -261,18 +261,6 @@
             color: rgba(245, 158, 11, 0.7);
         }
         
-        .speaker-badge {
-            padding: 0.125rem 0.5rem;
-            background: var(--bg-tertiary);
-            border-radius: 0.25rem;
-            font-size: 0.625rem;
-            font-weight: 500;
-        }
-        
-        .speaker-0 { border-left: 2px solid #6366f1; }
-        .speaker-1 { border-left: 2px solid #22c55e; }
-        .speaker-2 { border-left: 2px solid #f59e0b; }
-        .speaker-3 { border-left: 2px solid #ef4444; }
         
         .suggestions-section .section-label {
             color: var(--text-secondary);
@@ -1364,12 +1352,11 @@
             if (existing) existing.remove();
 
             const div = document.createElement('div');
-            div.className = `transcript-entry speaker-${data.speaker % 4}`;
+            div.className = 'transcript-entry';
             if (!data.is_final) div.classList.add('interim');
 
             const entryId = `${Date.now()}-${Math.random()}`;
             div.dataset.text = data.text;
-            div.dataset.speaker = data.speaker;
             div.dataset.entryId = entryId;
 
             // Create checkbox and text structure
@@ -1382,12 +1369,12 @@
 
                 const textSpan = document.createElement('span');
                 textSpan.className = 'transcript-text';
-                textSpan.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
+                textSpan.innerHTML = data.text;
 
                 div.appendChild(checkbox);
                 div.appendChild(textSpan);
             } else {
-                div.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
+                div.innerHTML = data.text;
             }
 
             transcriptBox.appendChild(div);
@@ -1446,7 +1433,6 @@
                 <div class="question-card" onclick="askQuestion('${escapeHtml(q.text)}')">
                     <div class="question-text">${escapeHtml(q.text)}</div>
                     <div class="question-meta">
-                        <span class="speaker-badge">Speaker ${q.speaker}</span>
                         <span>Click for answer</span>
                     </div>
                 </div>
@@ -1461,7 +1447,6 @@
             card.innerHTML = `
                 <div class="question-text">${escapeHtml(q.text)}</div>
                 <div class="question-meta">
-                    <span class="speaker-badge">Speaker ${q.speaker}</span>
                     <span>Click for answer</span>
                 </div>
             `;

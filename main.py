@@ -494,7 +494,7 @@ async def audio_websocket(websocket: WebSocket):
     loop = asyncio.get_running_loop()
 
     try:
-        # Configure Deepgram live transcription with diarization
+        # Configure Deepgram live transcription
         options = LiveOptions(
             model="nova-2",
             language="en",
@@ -503,7 +503,7 @@ async def audio_websocket(websocket: WebSocket):
             channels=1,
             smart_format=True,
             punctuate=True,
-            diarize=True,  # Enable speaker diarization
+            diarize=False,  # Disable speaker diarization
             interim_results=True,
             utterance_end_ms=1000,
             vad_events=True,
@@ -512,11 +512,10 @@ async def audio_websocket(websocket: WebSocket):
         dg_connection = deepgram.listen.websocket.v("1")
 
         # Track current utterance for interim results
-        current_utterance = {"speaker": -1, "text": ""}
         last_processed = ""
 
         def on_message(self, result, **kwargs):
-            nonlocal current_utterance, last_processed
+            nonlocal last_processed
 
             try:
                 transcript = result.channel.alternatives[0].transcript
@@ -524,12 +523,9 @@ async def audio_websocket(websocket: WebSocket):
                     return
 
                 is_final = result.is_final
-                words = result.channel.alternatives[0].words
 
-                # Get speaker from first word (diarization assigns speaker per word)
+                # No speaker diarization - use single speaker
                 speaker = 0
-                if words and len(words) > 0:
-                    speaker = getattr(words[0], 'speaker', 0)
 
                 if is_final:
                     # Final transcript - add to state
