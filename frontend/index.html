@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Meeting Assistant</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -765,6 +765,7 @@
 
             .overlay-footer {
                 padding: 0.75rem;
+                padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
                 flex-shrink: 0;
                 background: var(--bg-secondary);
             }
