@@ -78,10 +78,10 @@ meeting_state = MeetingState()
 
 # Global periodic tasks
 async def global_periodic_question_detection():
-    """Check for questions every 2 seconds using Haiku"""
+    """Check for questions every 4 seconds using Haiku"""
     logger.info("✓ Global periodic question detection started")
     while True:
-        await asyncio.sleep(2)
+        await asyncio.sleep(4)
         logger.info("→ Running Haiku question detection...")
         await detect_questions_with_haiku()
 
