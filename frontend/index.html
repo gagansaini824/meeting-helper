@@ -727,6 +727,7 @@
 
             .overlay-header {
                 padding: 0.75rem;
+                flex-shrink: 0;
             }
 
             .header-info h3 {
@@ -739,6 +740,8 @@
 
             .overlay-content {
                 padding: 0.75rem;
+                flex: 1;
+                overflow-y: auto;
             }
 
             .question-card,
@@ -762,14 +765,19 @@
 
             .overlay-footer {
                 padding: 0.75rem;
+                flex-shrink: 0;
+                background: var(--bg-secondary);
             }
 
             .main-btn {
                 padding: 0.75rem;
+                font-size: 0.875rem;
             }
 
             .docs-panel {
                 padding: 0.75rem;
+                max-height: 150px;
+                flex-shrink: 0;
             }
 
             .answer-panel {
@@ -778,6 +786,10 @@
 
             .transcript-box {
                 max-height: 100px;
+            }
+
+            #questionsList {
+                max-height: 150px;
             }
         }
 
