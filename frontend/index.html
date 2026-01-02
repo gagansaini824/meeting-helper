@@ -1013,8 +1013,10 @@
         const transcriptBox = document.getElementById('transcriptBox');
         const overlayContent = document.getElementById('overlayContent');
         
-        // WebSocket URL
-        const WS_BASE = `ws://${window.location.host}`;
+        // WebSocket URL - use wss:// for HTTPS, ws:// for HTTP
+        const WS_BASE = window.location.protocol === 'https:'
+            ? `wss://${window.location.host}`
+            : `ws://${window.location.host}`;
         
         // Connect to client WebSocket
         function connectClient() {
