@@ -204,13 +204,14 @@ async def detect_questions_with_haiku():
     try:
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-        system = """You are a question detector. Analyze the transcript and identify any ACTUAL questions being asked by speakers.
+        system = """You are a question detector. Analyze the transcript and identify ALL ACTUAL questions being asked by speakers.
 
 CRITICAL FORMATTING RULES (for regex pattern matching):
 1. ALL questions MUST end with "?" - this is mandatory
 2. ALL questions MUST start with a question word: what, how, why, when, where, who, which, can, could, would, should, is, are, do, does, did, has, have, will
 3. Questions must be at least 10 characters long
 4. Combine fragmented questions across multiple utterances into ONE complete, grammatically correct question
+5. IMPORTANT: Detect ALL questions in the transcript, including follow-up questions
 
 Valid question formats that will be detected:
 ✓ "What is the status of the project?"
@@ -232,14 +233,14 @@ INVALID formats to IGNORE (will NOT be detected):
 ✗ "Tell me about it" (no "?")
 ✗ Statements, comments, greetings
 
-Respond with a JSON object:
-{"question": "the reformatted question?"}
+Respond with a JSON object containing ALL questions found:
+{"questions": ["question 1?", "question 2?", "question 3?"]}
 
-If no question found, return {"question": null}"""
+If no questions found, return {"questions": []}"""
 
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=500,
             system=system,
             messages=[{"role": "user", "content": f"Recent transcript:\n{transcript}"}]
         )
@@ -259,35 +260,36 @@ If no question found, return {"question": null}"""
         json_text = text.split('\n\n')[0].strip()
 
         result = json.loads(json_text)
-        question_text = result.get('question')
+        questions = result.get('questions', [])
 
-        # If a question was detected
-        if question_text:
-            # Validate that it's actually a question using our regex
-            if not detect_question(question_text):
-                logger.info(f"Haiku detected non-question format, skipping: {question_text}")
-            else:
-                # Check if question already exists
-                exists = any(
-                    existing['text'].lower() == question_text.lower()
-                    for existing in meeting_state.detected_questions
-                )
-                if not exists:
-                    q_entry = {
-                        "text": question_text,
-                        "speaker": 0,
-                        "timestamp": datetime.now().isoformat(),
-                        "source": "haiku"
-                    }
-                    meeting_state.detected_questions.insert(0, q_entry)
-                    meeting_state.detected_questions = meeting_state.detected_questions[:5]
+        # Process all detected questions
+        for question_text in questions:
+            if question_text:
+                # Validate that it's actually a question using our regex
+                if not detect_question(question_text):
+                    logger.info(f"Haiku detected non-question format, skipping: {question_text}")
+                else:
+                    # Check if question already exists
+                    exists = any(
+                        existing['text'].lower() == question_text.lower()
+                        for existing in meeting_state.detected_questions
+                    )
+                    if not exists:
+                        q_entry = {
+                            "text": question_text,
+                            "speaker": 0,
+                            "timestamp": datetime.now().isoformat(),
+                            "source": "haiku"
+                        }
+                        meeting_state.detected_questions.insert(0, q_entry)
+                        meeting_state.detected_questions = meeting_state.detected_questions[:5]
 
-                    logger.info(f"✓ Haiku detected question: {question_text}")
-                    # Broadcast immediately
-                    await broadcast({
-                        "type": "question_detected",
-                        "data": q_entry
-                    })
+                        logger.info(f"✓ Haiku detected question: {question_text}")
+                        # Broadcast immediately
+                        await broadcast({
+                            "type": "question_detected",
+                            "data": q_entry
+                        })
     except Exception as e:
         logger.error(f"Haiku question detection error: {e}")
         if 'text' in locals():
