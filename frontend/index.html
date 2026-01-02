@@ -710,6 +710,7 @@
                 max-height: 100vh;
                 border-radius: 0;
                 border: none;
+                overflow-y: auto;
             }
 
             .overlay.minimized {
@@ -727,6 +728,7 @@
 
             .overlay-header {
                 padding: 0.75rem;
+                padding-top: max(0.75rem, env(safe-area-inset-top));
                 flex-shrink: 0;
             }
 
@@ -740,8 +742,8 @@
 
             .overlay-content {
                 padding: 0.75rem;
-                flex: 1;
-                overflow-y: auto;
+                flex: 1 1 auto;
+                overflow-y: visible;
             }
 
             .question-card,
