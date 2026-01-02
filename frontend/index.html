@@ -700,17 +700,28 @@
             }
 
             .overlay {
-                position: fixed;
+                position: absolute;
                 top: 0;
-                bottom: 0;
+                bottom: auto;
                 left: 0;
                 right: 0;
                 width: 100%;
-                height: 100vh;
-                max-height: 100vh;
+                height: auto;
+                min-height: 100vh;
+                max-height: none;
                 border-radius: 0;
                 border: none;
+                overflow: visible;
+                display: block;
+            }
+
+            body {
                 overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            html, body {
+                height: 100%;
             }
 
             .overlay.minimized {
@@ -729,7 +740,7 @@
             .overlay-header {
                 padding: 0.75rem;
                 padding-top: max(0.75rem, env(safe-area-inset-top));
-                flex-shrink: 0;
+                border-bottom: 1px solid var(--border);
             }
 
             .header-info h3 {
@@ -742,8 +753,7 @@
 
             .overlay-content {
                 padding: 0.75rem;
-                flex: 1 1 auto;
-                overflow-y: visible;
+                display: block;
             }
 
             .question-card,
@@ -768,8 +778,8 @@
             .overlay-footer {
                 padding: 0.75rem;
                 padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-                flex-shrink: 0;
                 background: var(--bg-secondary);
+                border-top: 1px solid var(--border);
             }
 
             .main-btn {
