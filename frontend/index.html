@@ -186,40 +186,57 @@
             gap: 1rem;
         }
         
+        .questions-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        #questionsList {
+            max-height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
         .section-label {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.625rem;
             font-weight: 500;
             color: var(--warning);
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            flex-shrink: 0;
         }
-        
+
         .question-card {
             background: rgba(245, 158, 11, 0.1);
             border: 1px solid rgba(245, 158, 11, 0.3);
             border-radius: 0.75rem;
-            padding: 0.875rem;
+            padding: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
+            flex-shrink: 0;
         }
-        
+
         .question-card:hover {
             background: rgba(245, 158, 11, 0.15);
         }
-        
+
         .question-text {
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             margin-bottom: 0.5rem;
+            line-height: 1.4;
         }
-        
+
         .question-meta {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: rgba(245, 158, 11, 0.7);
         }
         
@@ -239,19 +256,23 @@
         .suggestions-section .section-label {
             color: var(--text-secondary);
         }
-        
+
         .suggestion-card {
             background: var(--bg-tertiary);
             border-radius: 0.75rem;
-            padding: 0.875rem;
+            padding: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
         }
-        
+
         .suggestion-card:hover {
             background: #252528;
         }
-        
+
+        .suggestion-card .question-text {
+            font-size: 0.8125rem;
+        }
+
         .suggestion-type {
             font-size: 0.625rem;
             text-transform: uppercase;
@@ -266,14 +287,38 @@
 
         /* Manual Question Input */
         .question-input-container {
-            padding: 1rem;
+            padding: 0;
             border-top: 1px solid var(--border);
             background: var(--bg-secondary);
+        }
+
+        .question-input-toggle {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .question-input-toggle:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
         }
 
         .question-input-box {
             display: flex;
             gap: 0.5rem;
+            padding: 0 1rem 1rem 1rem;
+        }
+
+        .question-input-box.hidden {
+            display: none;
         }
 
         .question-input-box input {
@@ -350,14 +395,14 @@
         }
         
         .answer-question {
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--accent);
             font-weight: 500;
         }
-        
+
         .answer-text {
-            font-size: 0.875rem;
-            line-height: 1.6;
+            font-size: 0.8125rem;
+            line-height: 1.5;
         }
 
         .answer-footer {
@@ -450,29 +495,29 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
             cursor: pointer;
             background: none;
             border: none;
             padding: 0;
         }
-        
+
         .transcript-toggle:hover {
             color: var(--text-primary);
         }
-        
+
         .transcript-box {
             margin-top: 0.5rem;
             padding: 0.75rem;
             background: var(--bg-primary);
             border-radius: 0.5rem;
-            max-height: 150px;
+            max-height: 120px;
             overflow-y: auto;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
-            line-height: 1.6;
+            line-height: 1.5;
         }
         
         .transcript-entry {
@@ -631,11 +676,13 @@
         /* Mobile devices (up to 480px) */
         @media screen and (max-width: 480px) {
             body {
-                padding: 1rem;
+                padding: 0;
             }
 
             .container {
                 padding-top: 1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
             }
 
             h1 {
@@ -654,21 +701,28 @@
 
             .overlay {
                 position: fixed;
+                top: 0;
                 bottom: 0;
                 left: 0;
                 right: 0;
                 width: 100%;
-                max-height: 70vh;
-                border-radius: 1rem 1rem 0 0;
-                border-bottom: none;
+                height: 100vh;
+                max-height: 100vh;
+                border-radius: 0;
+                border: none;
             }
 
             .overlay.minimized {
+                position: fixed;
+                top: auto;
                 bottom: 1rem;
                 left: auto;
                 right: 1rem;
                 width: auto;
+                height: auto;
+                max-height: none;
                 border-radius: 1rem;
+                border: 1px solid var(--border);
             }
 
             .overlay-header {
@@ -932,7 +986,13 @@
 
             <!-- Manual Question Input -->
             <div class="question-input-container">
-                <div class="question-input-box">
+                <button class="question-input-toggle" id="questionInputToggle">
+                    <svg class="icon-xs" viewBox="0 0 24 24" id="toggleChevron">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                    Ask a question manually
+                </button>
+                <div class="question-input-box hidden" id="questionInputBox">
                     <input type="text" id="manualQuestionInput" placeholder="Type a question and press Enter or click Ask...">
                     <button id="askManualQuestion">Ask</button>
                 </div>
@@ -1300,6 +1360,22 @@
         // Manual question input
         const manualQuestionInput = document.getElementById('manualQuestionInput');
         const askManualQuestionBtn = document.getElementById('askManualQuestion');
+        const questionInputToggle = document.getElementById('questionInputToggle');
+        const questionInputBox = document.getElementById('questionInputBox');
+        const toggleChevron = document.getElementById('toggleChevron');
+        let questionInputVisible = false;
+
+        questionInputToggle.onclick = () => {
+            questionInputVisible = !questionInputVisible;
+            questionInputBox.classList.toggle('hidden', !questionInputVisible);
+
+            if (questionInputVisible) {
+                toggleChevron.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
+                manualQuestionInput.focus();
+            } else {
+                toggleChevron.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+            }
+        };
 
         function submitManualQuestion() {
             const question = manualQuestionInput.value.trim();
