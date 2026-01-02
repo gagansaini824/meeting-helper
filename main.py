@@ -42,7 +42,7 @@ class MeetingState:
             "timestamp": datetime.now().isoformat()
         }
         self.transcript.append(entry)
-        self.full_transcript += f" [Speaker {speaker}]: {text}"
+        self.full_transcript += f" {text}"
     
     def get_recent_transcript(self, chars: int = 3000) -> str:
         return self.full_transcript[-chars:] if len(self.full_transcript) > chars else self.full_transcript
