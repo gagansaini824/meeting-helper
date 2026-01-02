@@ -545,17 +545,33 @@
             margin-bottom: 0.5rem;
             padding: 0.25rem 0.5rem;
             border-radius: 0.25rem;
-            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
             transition: background 0.2s;
         }
 
         .transcript-entry:hover {
-            background: rgba(99, 102, 241, 0.1);
+            background: rgba(99, 102, 241, 0.05);
         }
 
         .transcript-entry.selected {
-            background: rgba(99, 102, 241, 0.2);
-            border-left: 2px solid var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .transcript-checkbox {
+            width: 14px;
+            height: 14px;
+            min-width: 14px;
+            margin-top: 0.15rem;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .transcript-text {
+            flex: 1;
+            font-size: 0.6875rem;
+            line-height: 1.5;
         }
 
         .interim {
@@ -1350,28 +1366,44 @@
             const div = document.createElement('div');
             div.className = `transcript-entry speaker-${data.speaker % 4}`;
             if (!data.is_final) div.classList.add('interim');
-            div.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
+
+            const entryId = `${Date.now()}-${Math.random()}`;
             div.dataset.text = data.text;
             div.dataset.speaker = data.speaker;
+            div.dataset.entryId = entryId;
 
-            // Make clickable for selection (only final entries)
+            // Create checkbox and text structure
             if (data.is_final) {
-                div.onclick = () => toggleTranscriptSelection(div);
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'transcript-checkbox';
+                checkbox.dataset.entryId = entryId;
+                checkbox.onchange = (e) => toggleTranscriptSelection(div, checkbox);
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'transcript-text';
+                textSpan.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
+
+                div.appendChild(checkbox);
+                div.appendChild(textSpan);
+            } else {
+                div.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
             }
 
             transcriptBox.appendChild(div);
             transcriptBox.scrollTop = transcriptBox.scrollHeight;
         }
 
-        function toggleTranscriptSelection(div) {
-            const entryId = div.dataset.text;
+        function toggleTranscriptSelection(div, checkbox) {
+            const entryId = div.dataset.entryId;
+            const text = div.dataset.text;
 
-            if (selectedTranscriptEntries.has(entryId)) {
-                selectedTranscriptEntries.delete(entryId);
-                div.classList.remove('selected');
-            } else {
-                selectedTranscriptEntries.add(entryId);
+            if (checkbox.checked) {
+                selectedTranscriptEntries.add(text);
                 div.classList.add('selected');
+            } else {
+                selectedTranscriptEntries.delete(text);
+                div.classList.remove('selected');
             }
 
             updateTranscriptActions();
@@ -1395,6 +1427,9 @@
             selectedTranscriptEntries.clear();
             document.querySelectorAll('.transcript-entry.selected').forEach(entry => {
                 entry.classList.remove('selected');
+            });
+            document.querySelectorAll('.transcript-checkbox:checked').forEach(checkbox => {
+                checkbox.checked = false;
             });
             updateTranscriptActions();
         }
