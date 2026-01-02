@@ -232,6 +232,21 @@
             background: rgba(245, 158, 11, 0.15);
         }
 
+        @keyframes slideInFromBottom {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .question-card-new {
+            animation: slideInFromBottom 0.3s ease-out;
+        }
+
         .question-text {
             font-size: 0.8125rem;
             margin-bottom: 0.5rem;
@@ -1301,7 +1316,7 @@
         function addQuestion(q) {
             questionsSection.classList.remove('hidden');
             const card = document.createElement('div');
-            card.className = 'question-card';
+            card.className = 'question-card question-card-new';
             card.onclick = () => askQuestion(q.text);
             card.innerHTML = `
                 <div class="question-text">${escapeHtml(q.text)}</div>
@@ -1317,6 +1332,15 @@
             while (questionsList.children.length > 5) {
                 questionsList.removeChild(questionsList.firstChild);
             }
+
+            // Scroll to show the new question at the bottom
+            setTimeout(() => {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    card.classList.remove('question-card-new');
+                }, 300);
+            }, 100);
         }
         
         // Suggestions
