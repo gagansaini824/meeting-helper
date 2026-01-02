@@ -124,6 +124,75 @@ async def broadcast(message: dict):
             disconnected.add(client)
     meeting_state.connected_clients -= disconnected
 
+# Force question detection on selected transcript
+async def force_detect_questions(text: str):
+    """Force question detection on user-selected transcript text"""
+    if len(text) < 20:
+        return
+
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        system = """You are a question detector. Analyze the provided text and identify ALL questions being asked.
+
+CRITICAL FORMATTING RULES:
+1. ALL questions MUST end with "?" - this is mandatory
+2. ALL questions MUST start with a question word: what, how, why, when, where, who, which, can, could, would, should, is, are, do, does, did, has, have, will
+3. Extract ALL questions from the text, not just one
+4. Combine fragmented questions into complete, grammatically correct questions
+
+Respond with a JSON object containing an array of questions:
+{"questions": ["question 1?", "question 2?", "question 3?"]}
+
+If no questions found, return {"questions": []}"""
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            system=system,
+            messages=[{"role": "user", "content": f"Selected transcript:\n{text}"}]
+        )
+
+        result_text = response.content[0].text.strip()
+
+        # Remove markdown code blocks if present
+        if result_text.startswith('```'):
+            lines = result_text.split('\n')
+            result_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else result_text
+            result_text = result_text.replace('```json', '').replace('```', '').strip()
+
+        json_text = result_text.split('\n\n')[0].strip()
+        result = json.loads(json_text)
+        questions = result.get('questions', [])
+
+        # Add all detected questions
+        for question_text in questions:
+            if question_text and detect_question(question_text):
+                # Check if question already exists
+                exists = any(
+                    existing['text'].lower() == question_text.lower()
+                    for existing in meeting_state.detected_questions
+                )
+                if not exists:
+                    q_entry = {
+                        "text": question_text,
+                        "speaker": 0,
+                        "timestamp": datetime.now().isoformat(),
+                        "source": "manual"
+                    }
+                    meeting_state.detected_questions.insert(0, q_entry)
+                    meeting_state.detected_questions = meeting_state.detected_questions[:5]
+
+                    logger.info(f"✓ Manually detected question: {question_text}")
+                    # Broadcast immediately
+                    await broadcast({
+                        "type": "question_detected",
+                        "data": q_entry
+                    })
+
+    except Exception as e:
+        logger.error(f"Force question detection error: {e}")
+
 # Detect questions using Haiku (smarter detection)
 async def detect_questions_with_haiku():
     transcript, has_new = meeting_state.get_new_transcript_for_detection(1500)
@@ -398,7 +467,12 @@ async def client_websocket(websocket: WebSocket):
             if data.get("type") == "get_answer":
                 question = data.get("question", "")
                 await answer_question_stream(question, websocket)
-            
+
+            elif data.get("type") == "force_question_detection":
+                text = data.get("text", "")
+                if text:
+                    await force_detect_questions(text)
+
             elif data.get("type") == "clear":
                 meeting_state.clear()
                 await broadcast({"type": "cleared"})

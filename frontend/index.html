@@ -543,12 +543,60 @@
         
         .transcript-entry {
             margin-bottom: 0.5rem;
-            padding-left: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: background 0.2s;
         }
-        
+
+        .transcript-entry:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .transcript-entry.selected {
+            background: rgba(99, 102, 241, 0.2);
+            border-left: 2px solid var(--accent);
+        }
+
         .interim {
             opacity: 0.5;
             font-style: italic;
+        }
+
+        .transcript-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem 0;
+        }
+
+        .transcript-actions button {
+            padding: 0.375rem 0.75rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .transcript-actions button:hover {
+            background: #5558e3;
+        }
+
+        .transcript-actions button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .transcript-actions .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .transcript-actions .btn-secondary:hover {
+            background: #252528;
         }
         
         /* Footer */
@@ -1063,6 +1111,14 @@
                     Transcript
                 </button>
                 <div class="transcript-box hidden" id="transcriptBox"></div>
+                <div class="transcript-actions hidden" id="transcriptActions">
+                    <button id="generateQuestionBtn" disabled>
+                        Generate Questions
+                    </button>
+                    <button class="btn-secondary" id="clearSelectionBtn" disabled>
+                        Clear Selection
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1102,7 +1158,12 @@
         const collapseAnswer = document.getElementById('collapseAnswer');
         const transcriptToggle = document.getElementById('transcriptToggle');
         const transcriptBox = document.getElementById('transcriptBox');
+        const transcriptActions = document.getElementById('transcriptActions');
+        const generateQuestionBtn = document.getElementById('generateQuestionBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
         const overlayContent = document.getElementById('overlayContent');
+
+        let selectedTranscriptEntries = new Set();
         
         // WebSocket URL - use wss:// for HTTPS, ws:// for HTTP
         const WS_BASE = window.location.protocol === 'https:'
@@ -1285,13 +1346,57 @@
         function appendTranscript(data) {
             const existing = transcriptBox.querySelector('.interim');
             if (existing) existing.remove();
-            
+
             const div = document.createElement('div');
             div.className = `transcript-entry speaker-${data.speaker % 4}`;
             if (!data.is_final) div.classList.add('interim');
             div.innerHTML = `<strong>Speaker ${data.speaker}:</strong> ${data.text}`;
+            div.dataset.text = data.text;
+            div.dataset.speaker = data.speaker;
+
+            // Make clickable for selection (only final entries)
+            if (data.is_final) {
+                div.onclick = () => toggleTranscriptSelection(div);
+            }
+
             transcriptBox.appendChild(div);
             transcriptBox.scrollTop = transcriptBox.scrollHeight;
+        }
+
+        function toggleTranscriptSelection(div) {
+            const entryId = div.dataset.text;
+
+            if (selectedTranscriptEntries.has(entryId)) {
+                selectedTranscriptEntries.delete(entryId);
+                div.classList.remove('selected');
+            } else {
+                selectedTranscriptEntries.add(entryId);
+                div.classList.add('selected');
+            }
+
+            updateTranscriptActions();
+        }
+
+        function updateTranscriptActions() {
+            const hasSelection = selectedTranscriptEntries.size > 0;
+
+            if (hasSelection) {
+                transcriptActions.classList.remove('hidden');
+                generateQuestionBtn.disabled = false;
+                clearSelectionBtn.disabled = false;
+            } else {
+                transcriptActions.classList.add('hidden');
+                generateQuestionBtn.disabled = true;
+                clearSelectionBtn.disabled = true;
+            }
+        }
+
+        function clearTranscriptSelection() {
+            selectedTranscriptEntries.clear();
+            document.querySelectorAll('.transcript-entry.selected').forEach(entry => {
+                entry.classList.remove('selected');
+            });
+            updateTranscriptActions();
         }
         
         // Questions
@@ -1542,6 +1647,44 @@
         transcriptToggle.onclick = () => {
             showTranscript = !showTranscript;
             transcriptBox.classList.toggle('hidden', !showTranscript);
+            transcriptActions.classList.toggle('hidden', !showTranscript || selectedTranscriptEntries.size === 0);
+        };
+
+        generateQuestionBtn.onclick = async () => {
+            if (selectedTranscriptEntries.size === 0) return;
+
+            generateQuestionBtn.disabled = true;
+            generateQuestionBtn.textContent = 'Generating...';
+
+            try {
+                const selectedText = Array.from(selectedTranscriptEntries).join(' ');
+
+                if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({
+                        type: 'force_question_detection',
+                        text: selectedText
+                    }));
+
+                    // Clear selection after sending
+                    setTimeout(() => {
+                        clearTranscriptSelection();
+                        generateQuestionBtn.textContent = 'Generate Questions';
+                        generateQuestionBtn.disabled = false;
+                    }, 500);
+                } else {
+                    alert('WebSocket not connected. Please refresh the page.');
+                    generateQuestionBtn.textContent = 'Generate Questions';
+                    generateQuestionBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Failed to generate questions:', error);
+                generateQuestionBtn.textContent = 'Generate Questions';
+                generateQuestionBtn.disabled = false;
+            }
+        };
+
+        clearSelectionBtn.onclick = () => {
+            clearTranscriptSelection();
         };
         
         fileInput.onchange = (e) => {
