@@ -1137,6 +1137,9 @@
         let audioWs = null;
         let mediaRecorder = null;
         let audioContext = null;
+        let audioProcessor = null;
+        let audioSource = null;
+        let mediaStream = null;
         let documents = [];
         
         // DOM elements
@@ -1274,11 +1277,20 @@
                 
                 audioWs.onerror = (error) => {
                     console.error('Audio WebSocket error:', error);
-                    stopListening();
                 };
-                
-                audioWs.onclose = () => {
-                    console.log('Audio WebSocket closed');
+
+                audioWs.onclose = (event) => {
+                    console.log('Audio WebSocket closed', event.code, event.reason);
+                    if (isListening && !event.wasClean) {
+                        // Unexpected close - try to reconnect
+                        console.log('Attempting to reconnect audio...');
+                        setTimeout(() => {
+                            if (isListening) {
+                                stopListening();
+                                startListening();
+                            }
+                        }, 1000);
+                    }
                 };
                 
             } catch (error) {
@@ -1288,41 +1300,62 @@
         }
         
         function startRecording(stream) {
+            mediaStream = stream;
             audioContext = new AudioContext({ sampleRate: 16000 });
-            const source = audioContext.createMediaStreamSource(stream);
-            const processor = audioContext.createScriptProcessor(4096, 1, 1);
-            
-            processor.onaudioprocess = (e) => {
+            audioSource = audioContext.createMediaStreamSource(stream);
+            audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            audioProcessor.onaudioprocess = (e) => {
                 if (audioWs && audioWs.readyState === WebSocket.OPEN) {
                     const inputData = e.inputBuffer.getChannelData(0);
                     const pcmData = new Int16Array(inputData.length);
-                    
+
                     for (let i = 0; i < inputData.length; i++) {
                         pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
                     }
-                    
+
                     audioWs.send(pcmData.buffer);
                 }
             };
-            
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-            
+
+            audioSource.connect(audioProcessor);
+            audioProcessor.connect(audioContext.destination);
+
             isListening = true;
             updateUI();
         }
         
         function stopListening() {
-            if (audioWs) {
-                audioWs.close();
-                audioWs = null;
+            // Disconnect audio nodes properly
+            if (audioProcessor) {
+                audioProcessor.disconnect();
+                audioProcessor.onaudioprocess = null;
+                audioProcessor = null;
             }
-            
+
+            if (audioSource) {
+                audioSource.disconnect();
+                audioSource = null;
+            }
+
+            // Stop all media stream tracks
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            // Close audio context
             if (audioContext) {
                 audioContext.close();
                 audioContext = null;
             }
-            
+
+            // Close WebSocket
+            if (audioWs) {
+                audioWs.close();
+                audioWs = null;
+            }
+
             isListening = false;
             updateUI();
         }
