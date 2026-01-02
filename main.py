@@ -33,6 +33,7 @@ class MeetingState:
         self.suggestions: list[dict] = []
         self.last_analysis_time: float = 0
         self.connected_clients: set[WebSocket] = set()
+        self.last_processed_transcript_length: int = 0  # Track processed length
     
     def add_utterance(self, speaker: int, text: str):
         entry = {
@@ -45,12 +46,33 @@ class MeetingState:
     
     def get_recent_transcript(self, chars: int = 3000) -> str:
         return self.full_transcript[-chars:] if len(self.full_transcript) > chars else self.full_transcript
-    
+
+    def get_new_transcript_for_detection(self, max_chars: int = 1500) -> tuple[str, bool]:
+        """Get only new transcript content that hasn't been processed yet.
+        Returns (transcript_text, has_new_content)"""
+        current_length = len(self.full_transcript)
+
+        # No new content
+        if current_length <= self.last_processed_transcript_length:
+            return ("", False)
+
+        # Get new portion with some context (last 400 chars before new content)
+        context_start = max(0, self.last_processed_transcript_length - 400)
+        new_text = self.full_transcript[context_start:]
+
+        # Update processed length
+        self.last_processed_transcript_length = current_length
+
+        # Limit to max_chars
+        result = new_text[-max_chars:] if len(new_text) > max_chars else new_text
+        return (result, True)
+
     def clear(self):
         self.transcript = []
         self.full_transcript = ""
         self.detected_questions = []
         self.suggestions = []
+        self.last_processed_transcript_length = 0
 
 meeting_state = MeetingState()
 
@@ -104,8 +126,10 @@ async def broadcast(message: dict):
 
 # Detect questions using Haiku (smarter detection)
 async def detect_questions_with_haiku():
-    transcript = meeting_state.get_recent_transcript(1500)
-    if len(transcript) < 50:
+    transcript, has_new = meeting_state.get_new_transcript_for_detection(1500)
+
+    # Skip if no new content or too short
+    if not has_new or len(transcript) < 50:
         return
 
     try:
