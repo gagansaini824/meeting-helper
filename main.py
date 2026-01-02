@@ -47,7 +47,7 @@ class MeetingState:
     def get_recent_transcript(self, chars: int = 3000) -> str:
         return self.full_transcript[-chars:] if len(self.full_transcript) > chars else self.full_transcript
 
-    def get_new_transcript_for_detection(self, max_chars: int = 1500) -> tuple[str, bool]:
+    def get_new_transcript_for_detection(self, max_chars: int = 2500) -> tuple[str, bool]:
         """Get only new transcript content that hasn't been processed yet.
         Returns (transcript_text, has_new_content)"""
         current_length = len(self.full_transcript)
@@ -56,8 +56,8 @@ class MeetingState:
         if current_length <= self.last_processed_transcript_length:
             return ("", False)
 
-        # Get new portion with some context (last 400 chars before new content)
-        context_start = max(0, self.last_processed_transcript_length - 400)
+        # Get new portion with some context (last 1000 chars before new content for overlap)
+        context_start = max(0, self.last_processed_transcript_length - 1000)
         new_text = self.full_transcript[context_start:]
 
         # Update processed length
@@ -195,7 +195,7 @@ If no questions found, return {"questions": []}"""
 
 # Detect questions using Haiku (smarter detection)
 async def detect_questions_with_haiku():
-    transcript, has_new = meeting_state.get_new_transcript_for_detection(1500)
+    transcript, has_new = meeting_state.get_new_transcript_for_detection(2500)
 
     # Skip if no new content or too short
     if not has_new or len(transcript) < 50:
