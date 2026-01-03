@@ -1,4 +1,5 @@
 import re
+from typing import Optional, List
 
 QUESTION_PATTERNS = [
     re.compile(r'\b(what|how|why|when|where|who|which)\s+.{5,}\?$', re.IGNORECASE),
@@ -15,7 +16,7 @@ QUESTION_STARTERS = [
     'has', 'have', 'will', 'shall'
 ]
 
-def detect_question(text: str) -> str | None:
+def detect_question(text: str) -> Optional[str]:
     if not text or len(text) < 10:
         return None
     
@@ -41,7 +42,7 @@ def detect_question(text: str) -> str | None:
     
     return None
 
-def extract_questions(transcript: str, limit: int = 5) -> list[str]:
+def extract_questions(transcript: str, limit: int = 5) -> List[str]:
     sentences = re.split(r'[.!?]\s+', transcript)
     questions = []
     

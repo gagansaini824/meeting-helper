@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Meeting Assistant</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Clerk JS SDK will be loaded dynamically after getting publishable key -->
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
@@ -199,11 +203,27 @@
         }
 
         #questionsList {
-            max-height: 300px;
+            max-height: 40vh;
+            min-height: 100px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent;
+        }
+
+        #questionsList::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #questionsList::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #questionsList::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 3px;
         }
 
         .section-label {
@@ -260,8 +280,26 @@
             font-size: 0.6875rem;
             color: rgba(245, 158, 11, 0.7);
         }
-        
-        
+
+        .edit-question-btn {
+            background: transparent;
+            border: none;
+            padding: 0.25rem;
+            cursor: pointer;
+            color: rgba(245, 158, 11, 0.6);
+            border-radius: 0.25rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 0.75rem;
+        }
+
+        .edit-question-btn:hover {
+            background: rgba(245, 158, 11, 0.2);
+            color: rgba(245, 158, 11, 1);
+        }
+
         .suggestions-section .section-label {
             color: var(--text-secondary);
         }
@@ -427,6 +465,15 @@
             display: none;
         }
 
+        .answer-panel.collapsed .answer-header {
+            cursor: pointer;
+            margin-bottom: 0;
+        }
+
+        .answer-panel.collapsed .answer-header:hover {
+            opacity: 0.8;
+        }
+
         /* Markdown styling for answer text */
         .answer-text h1, .answer-text h2, .answer-text h3 {
             color: var(--text-primary);
@@ -521,12 +568,28 @@
             padding: 0.75rem;
             background: var(--bg-primary);
             border-radius: 0.5rem;
-            max-height: 250px;
+            max-height: 50vh;
+            min-height: 150px;
             overflow-y: auto;
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.6875rem;
             color: var(--text-secondary);
             line-height: 1.5;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent;
+        }
+
+        .transcript-box::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .transcript-box::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .transcript-box::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 3px;
         }
         
         .transcript-entry {
@@ -540,11 +603,17 @@
         }
 
         .transcript-entry:hover {
-            background: rgba(99, 102, 241, 0.05);
+            background: rgba(99, 102, 241, 0.1);
+            cursor: pointer;
         }
 
         .transcript-entry.selected {
-            background: rgba(99, 102, 241, 0.1);
+            background: rgba(99, 102, 241, 0.2);
+            border-left: 2px solid var(--accent);
+        }
+
+        .transcript-entry:not(.interim) {
+            user-select: none;
         }
 
         .transcript-checkbox {
@@ -560,6 +629,7 @@
             flex: 1;
             font-size: 0.6875rem;
             line-height: 1.5;
+            cursor: pointer;
         }
 
         .interim {
@@ -960,9 +1030,192 @@
                 background: #252528;
             }
         }
+
+        /* Authentication UI */
+        .auth-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .auth-user {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+        }
+
+        .auth-user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+        }
+
+        .auth-user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .auth-user-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .auth-user-name {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .auth-user-email {
+            font-size: 0.625rem;
+            color: var(--text-secondary);
+        }
+
+        .auth-btn {
+            padding: 0.5rem 1rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-family: inherit;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .auth-btn:hover {
+            background: #5558e3;
+        }
+
+        .auth-btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .auth-btn-secondary:hover {
+            background: #252528;
+        }
+
+        .dev-mode-badge {
+            font-size: 0.625rem;
+            padding: 0.125rem 0.375rem;
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border-radius: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .auth-loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+        }
+
+        /* Login overlay */
+        .login-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .login-overlay.hidden {
+            display: none;
+        }
+
+        .login-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .login-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .login-card p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-card .auth-btn {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+        }
+
+        @media screen and (max-width: 480px) {
+            .auth-container {
+                top: 0.5rem;
+                right: 0.5rem;
+            }
+
+            .auth-user-info {
+                display: none;
+            }
+
+            .login-card {
+                margin: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Authentication Container -->
+    <div class="auth-container" id="authContainer">
+        <div class="auth-loading" id="authLoading">
+            <div class="spinner"></div>
+            Loading...
+        </div>
+    </div>
+
+    <!-- Login Overlay (shown when auth required but not logged in) -->
+    <div class="login-overlay hidden" id="loginOverlay">
+        <div class="login-card">
+            <h2>Welcome</h2>
+            <p>Sign in to access your personalized meeting assistant with document storage and AI-powered insights.</p>
+            <button class="auth-btn" id="loginBtn">Sign In</button>
+        </div>
+    </div>
+
     <div class="container">
         <h1>Meeting Assistant</h1>
         <p class="subtitle">
@@ -1012,6 +1265,12 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button class="icon-btn" id="clearConversationBtn" title="Clear Conversation">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="docsBtn" title="Documents">
                     <svg class="icon" viewBox="0 0 24 24">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1141,7 +1400,14 @@
         let audioSource = null;
         let mediaStream = null;
         let documents = [];
-        
+
+        // Authentication state
+        let authConfig = null;
+        let currentUser = null;
+        let authToken = null;
+        let isDevMode = false;
+        let clerkInstance = null;
+
         // DOM elements
         const overlay = document.getElementById('overlay');
         const overlayHeader = document.getElementById('overlayHeader');
@@ -1170,24 +1436,256 @@
         const clearSelectionBtn = document.getElementById('clearSelectionBtn');
         const overlayContent = document.getElementById('overlayContent');
 
+        // Auth DOM elements
+        const authContainer = document.getElementById('authContainer');
+        const authLoading = document.getElementById('authLoading');
+        const loginOverlay = document.getElementById('loginOverlay');
+        const loginBtn = document.getElementById('loginBtn');
+
         let selectedTranscriptEntries = new Set();
-        
+
+        // Drag selection state
+        let isDragging = false;
+        let dragStartEntry = null;
+
         // WebSocket URL - use wss:// for HTTPS, ws:// for HTTP
         const WS_BASE = window.location.protocol === 'https:'
             ? `wss://${window.location.host}`
             : `ws://${window.location.host}`;
-        
-        // Connect to client WebSocket
-        function connectClient() {
-            clientWs = new WebSocket(`${WS_BASE}/ws/client`);
-            
+
+        // Authentication functions
+        function loadClerkScript(publishableKey) {
+            return new Promise((resolve, reject) => {
+                // Check if already loaded
+                if (window.Clerk) {
+                    resolve();
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+                script.async = true;
+                script.crossOrigin = 'anonymous';
+                script.setAttribute('data-clerk-publishable-key', publishableKey);
+
+                script.onload = () => {
+                    console.log('Clerk script loaded successfully');
+                    resolve();
+                };
+
+                script.onerror = (error) => {
+                    console.error('Failed to load Clerk script:', error);
+                    reject(new Error('Failed to load Clerk script'));
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        async function initAuth() {
+            try {
+                // Fetch auth config from server
+                const response = await fetch('/api/auth/config');
+                authConfig = await response.json();
+
+                if (!authConfig.isConfigured) {
+                    // Dev mode - no authentication required
+                    console.log('Auth not configured - running in dev mode');
+                    isDevMode = true;
+                    currentUser = { id: 'dev_user', fullName: 'Development User', email: 'dev@localhost' };
+                    renderAuthUI();
+                    initApp();
+                    return;
+                }
+
+                // Dynamically load Clerk script with the publishable key
+                await loadClerkScript(authConfig.publishableKey);
+
+                // Wait for Clerk to be available
+                await waitForClerk();
+
+                // Initialize Clerk
+                clerkInstance = window.Clerk;
+                await clerkInstance.load();
+
+                // Check if user is signed in
+                if (clerkInstance.user) {
+                    currentUser = {
+                        id: clerkInstance.user.id,
+                        fullName: clerkInstance.user.fullName || clerkInstance.user.firstName || 'User',
+                        firstName: clerkInstance.user.firstName,
+                        lastName: clerkInstance.user.lastName,
+                        email: clerkInstance.user.primaryEmailAddress?.emailAddress,
+                        imageUrl: clerkInstance.user.imageUrl
+                    };
+                    authToken = await clerkInstance.session?.getToken();
+                    renderAuthUI();
+                    initApp();
+                } else {
+                    // Show login overlay
+                    renderAuthUI();
+                    showLoginOverlay();
+                }
+
+                // Listen for auth state changes
+                clerkInstance.addListener(async (event) => {
+                    if (event.user) {
+                        currentUser = {
+                            id: event.user.id,
+                            fullName: event.user.fullName || event.user.firstName || 'User',
+                            firstName: event.user.firstName,
+                            lastName: event.user.lastName,
+                            email: event.user.primaryEmailAddress?.emailAddress,
+                            imageUrl: event.user.imageUrl
+                        };
+                        authToken = await clerkInstance.session?.getToken();
+                        hideLoginOverlay();
+                        renderAuthUI();
+                        initApp();
+                    } else {
+                        currentUser = null;
+                        authToken = null;
+                        showLoginOverlay();
+                        renderAuthUI();
+                    }
+                });
+
+            } catch (error) {
+                console.error('Auth initialization failed:', error);
+                // Fallback to dev mode on error
+                isDevMode = true;
+                currentUser = { id: 'dev_user', fullName: 'Development User', email: 'dev@localhost' };
+                renderAuthUI();
+                initApp();
+            }
+        }
+
+        function waitForClerk() {
+            return new Promise((resolve, reject) => {
+                if (window.Clerk) {
+                    resolve();
+                    return;
+                }
+
+                let attempts = 0;
+                const maxAttempts = 50; // 5 seconds max
+                const interval = setInterval(() => {
+                    attempts++;
+                    if (window.Clerk) {
+                        clearInterval(interval);
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        reject(new Error('Clerk failed to load'));
+                    }
+                }, 100);
+            });
+        }
+
+        function renderAuthUI() {
+            authLoading.style.display = 'none';
+
+            if (currentUser) {
+                const initials = getInitials(currentUser.fullName || currentUser.email || 'U');
+                const avatarContent = currentUser.imageUrl
+                    ? `<img src="${currentUser.imageUrl}" alt="${currentUser.fullName}">`
+                    : initials;
+
+                authContainer.innerHTML = `
+                    <div class="auth-user">
+                        <div class="auth-user-avatar">${avatarContent}</div>
+                        <div class="auth-user-info">
+                            <span class="auth-user-name">${escapeHtml(currentUser.fullName || 'User')}</span>
+                            <span class="auth-user-email">${escapeHtml(currentUser.email || '')}</span>
+                        </div>
+                        ${isDevMode ? '<span class="dev-mode-badge">Dev Mode</span>' : ''}
+                    </div>
+                    ${!isDevMode ? '<button class="auth-btn auth-btn-secondary" onclick="signOut()">Sign Out</button>' : ''}
+                `;
+            } else {
+                authContainer.innerHTML = `
+                    <button class="auth-btn" onclick="signIn()">Sign In</button>
+                `;
+            }
+        }
+
+        function getInitials(name) {
+            if (!name) return 'U';
+            const parts = name.split(' ');
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            }
+            return name.substring(0, 2).toUpperCase();
+        }
+
+        function showLoginOverlay() {
+            loginOverlay.classList.remove('hidden');
+        }
+
+        function hideLoginOverlay() {
+            loginOverlay.classList.add('hidden');
+        }
+
+        async function signIn() {
+            if (clerkInstance) {
+                clerkInstance.openSignIn();
+            }
+        }
+
+        async function signOut() {
+            if (clerkInstance) {
+                await clerkInstance.signOut();
+                // Disconnect WebSockets
+                if (clientWs) {
+                    clientWs.close();
+                    clientWs = null;
+                }
+                if (audioWs) {
+                    stopListening();
+                }
+                currentUser = null;
+                authToken = null;
+                renderAuthUI();
+                showLoginOverlay();
+            }
+        }
+
+        // Get auth token for WebSocket connections
+        async function getAuthToken() {
+            if (isDevMode) return null;
+            if (clerkInstance?.session) {
+                authToken = await clerkInstance.session.getToken();
+            }
+            return authToken;
+        }
+
+        // Connect to client WebSocket with authentication
+        let isIntentionalClose = false;
+        async function connectClient() {
+            // Close existing connection if any
+            if (clientWs && clientWs.readyState !== WebSocket.CLOSED) {
+                isIntentionalClose = true;
+                clientWs.close();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            const token = await getAuthToken();
+            const wsUrl = token
+                ? `${WS_BASE}/ws/client?token=${encodeURIComponent(token)}`
+                : `${WS_BASE}/ws/client`;
+
+            isIntentionalClose = false;
+            clientWs = new WebSocket(wsUrl);
+
             clientWs.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 handleMessage(msg);
             };
-            
+
             clientWs.onclose = () => {
-                setTimeout(connectClient, 2000);
+                if (!isIntentionalClose) {
+                    setTimeout(connectClient, 2000);
+                }
             };
         }
         
@@ -1253,7 +1751,7 @@
         // Audio streaming
         async function startListening() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         channelCount: 1,
                         sampleRate: 16000,
@@ -1261,27 +1759,42 @@
                         noiseSuppression: true
                     }
                 });
-                
-                audioWs = new WebSocket(`${WS_BASE}/ws/audio`);
-                
+
+                // Close existing audio WebSocket if any
+                let isAudioIntentionalClose = false;
+                if (audioWs && audioWs.readyState !== WebSocket.CLOSED) {
+                    isAudioIntentionalClose = true;
+                    audioWs.close();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Get auth token for audio WebSocket
+                const token = await getAuthToken();
+                const wsUrl = token
+                    ? `${WS_BASE}/ws/audio?token=${encodeURIComponent(token)}`
+                    : `${WS_BASE}/ws/audio`;
+
+                isAudioIntentionalClose = false;
+                audioWs = new WebSocket(wsUrl);
+
                 audioWs.onopen = () => {
                     console.log('Audio WebSocket connected');
                 };
-                
+
                 audioWs.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'ready') {
                         startRecording(stream);
                     }
                 };
-                
+
                 audioWs.onerror = (error) => {
                     console.error('Audio WebSocket error:', error);
                 };
 
                 audioWs.onclose = (event) => {
                     console.log('Audio WebSocket closed', event.code, event.reason);
-                    if (isListening && !event.wasClean) {
+                    if (isListening && !event.wasClean && !isAudioIntentionalClose) {
                         // Unexpected close - try to reconnect
                         console.log('Attempting to reconnect audio...');
                         setTimeout(() => {
@@ -1380,9 +1893,23 @@
             });
         }
         
+        // Track the last final transcript to avoid duplicates
+        let lastFinalTranscript = "";
+
         function appendTranscript(data) {
-            const existing = transcriptBox.querySelector('.interim');
-            if (existing) existing.remove();
+            // Remove ALL interim entries
+            transcriptBox.querySelectorAll('.interim').forEach(el => el.remove());
+
+            // If this is a final result, check if it's a duplicate of the last final
+            if (data.is_final) {
+                // Normalize text for comparison (trim whitespace)
+                const normalizedText = data.text.trim();
+                if (normalizedText === lastFinalTranscript) {
+                    // Skip duplicate final transcript
+                    return;
+                }
+                lastFinalTranscript = normalizedText;
+            }
 
             const div = document.createElement('div');
             div.className = 'transcript-entry';
@@ -1392,13 +1919,17 @@
             div.dataset.text = data.text;
             div.dataset.entryId = entryId;
 
-            // Create checkbox and text structure
+            // Create checkbox and text structure with drag selection support
             if (data.is_final) {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'transcript-checkbox';
                 checkbox.dataset.entryId = entryId;
-                checkbox.onchange = (e) => toggleTranscriptSelection(div, checkbox);
+                checkbox.onchange = (e) => {
+                    e.stopPropagation();
+                    toggleTranscriptSelection(div, checkbox);
+                };
+                checkbox.onclick = (e) => e.stopPropagation();
 
                 const textSpan = document.createElement('span');
                 textSpan.className = 'transcript-text';
@@ -1406,6 +1937,25 @@
 
                 div.appendChild(checkbox);
                 div.appendChild(textSpan);
+
+                // Add drag selection events on the text span
+                textSpan.onmousedown = (e) => {
+                    e.preventDefault();
+                    isDragging = true;
+                    dragStartEntry = div;
+                    // Clear previous selection if not holding shift
+                    if (!e.shiftKey) {
+                        clearTranscriptSelection();
+                    }
+                    selectEntry(div, true);
+                    checkbox.checked = true;
+                };
+
+                textSpan.onmouseenter = (e) => {
+                    if (isDragging) {
+                        selectEntriesInRange(dragStartEntry, div);
+                    }
+                };
             } else {
                 div.innerHTML = data.text;
             }
@@ -1413,6 +1963,54 @@
             transcriptBox.appendChild(div);
             transcriptBox.scrollTop = transcriptBox.scrollHeight;
         }
+
+        // Drag selection helper functions
+        function selectEntry(div, selected) {
+            const text = div.dataset.text;
+            if (selected) {
+                selectedTranscriptEntries.add(text);
+                div.classList.add('selected');
+            } else {
+                selectedTranscriptEntries.delete(text);
+                div.classList.remove('selected');
+            }
+            updateTranscriptActions();
+        }
+
+        function selectEntriesInRange(startDiv, endDiv) {
+            const entries = Array.from(transcriptBox.querySelectorAll('.transcript-entry:not(.interim)'));
+            const startIndex = entries.indexOf(startDiv);
+            const endIndex = entries.indexOf(endDiv);
+
+            if (startIndex === -1 || endIndex === -1) return;
+
+            const minIndex = Math.min(startIndex, endIndex);
+            const maxIndex = Math.max(startIndex, endIndex);
+
+            // Clear all selections first
+            entries.forEach(entry => {
+                selectedTranscriptEntries.delete(entry.dataset.text);
+                entry.classList.remove('selected');
+                const cb = entry.querySelector('.transcript-checkbox');
+                if (cb) cb.checked = false;
+            });
+
+            // Select entries in range
+            for (let i = minIndex; i <= maxIndex; i++) {
+                selectedTranscriptEntries.add(entries[i].dataset.text);
+                entries[i].classList.add('selected');
+                const cb = entries[i].querySelector('.transcript-checkbox');
+                if (cb) cb.checked = true;
+            }
+
+            updateTranscriptActions();
+        }
+
+        // Global mouseup to end drag selection
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            dragStartEntry = null;
+        });
 
         function toggleTranscriptSelection(div, checkbox) {
             const entryId = div.dataset.entryId;
@@ -1447,9 +2045,8 @@
             selectedTranscriptEntries.clear();
             document.querySelectorAll('.transcript-entry.selected').forEach(entry => {
                 entry.classList.remove('selected');
-            });
-            document.querySelectorAll('.transcript-checkbox:checked').forEach(checkbox => {
-                checkbox.checked = false;
+                const cb = entry.querySelector('.transcript-checkbox');
+                if (cb) cb.checked = false;
             });
             updateTranscriptActions();
         }
@@ -1474,26 +2071,52 @@
         
         function addQuestion(q) {
             questionsSection.classList.remove('hidden');
+
+            // Check for duplicate questions (case-insensitive)
+            const existingQuestions = Array.from(questionsList.querySelectorAll('.question-text'))
+                .map(el => el.textContent.toLowerCase().trim());
+            if (existingQuestions.includes(q.text.toLowerCase().trim())) {
+                return; // Skip duplicate
+            }
+
             const card = document.createElement('div');
             card.className = 'question-card question-card-new';
-            card.onclick = () => askQuestion(q.text);
-            card.innerHTML = `
-                <div class="question-text">${escapeHtml(q.text)}</div>
-                <div class="question-meta">
-                    <span>Click for answer</span>
-                </div>
-            `;
+
+            const questionText = document.createElement('div');
+            questionText.className = 'question-text';
+            questionText.textContent = q.text;
+            questionText.onclick = () => askQuestion(q.text);
+
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'question-meta';
+
+            const answerSpan = document.createElement('span');
+            answerSpan.textContent = 'Click for answer';
+            answerSpan.onclick = () => askQuestion(q.text);
+            answerSpan.style.cursor = 'pointer';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-question-btn';
+            editBtn.title = 'Edit question';
+            editBtn.innerHTML = `<svg class="icon-xs" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                editQuestion(q.text);
+            };
+
+            metaDiv.appendChild(answerSpan);
+            metaDiv.appendChild(editBtn);
+            card.appendChild(questionText);
+            card.appendChild(metaDiv);
+
             // Add new questions at the bottom
             questionsList.appendChild(card);
 
-            // Keep only 5, remove from top (oldest)
-            while (questionsList.children.length > 5) {
-                questionsList.removeChild(questionsList.firstChild);
-            }
+            // Questions persist until user clears conversation (no limit)
 
             // Scroll to show the new question at the bottom
             setTimeout(() => {
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                questionsList.scrollTop = questionsList.scrollHeight;
                 // Remove animation class after animation completes
                 setTimeout(() => {
                     card.classList.remove('question-card-new');
@@ -1549,6 +2172,13 @@
             answerPanel.classList.toggle('collapsed');
         };
 
+        // Click on answer header to expand when collapsed
+        answerQuestion.onclick = () => {
+            if (answerPanel.classList.contains('collapsed')) {
+                answerPanel.classList.remove('collapsed');
+            }
+        };
+
         // Manual question input
         const manualQuestionInput = document.getElementById('manualQuestionInput');
         const askManualQuestionBtn = document.getElementById('askManualQuestion');
@@ -1575,6 +2205,20 @@
                 askQuestion(question);
                 manualQuestionInput.value = '';
             }
+        }
+
+        function editQuestion(questionText) {
+            // Expand the manual question input if hidden
+            if (!questionInputVisible) {
+                questionInputVisible = true;
+                questionInputBox.classList.remove('hidden');
+                toggleChevron.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
+            }
+            // Paste the question into the input
+            manualQuestionInput.value = questionText;
+            manualQuestionInput.focus();
+            // Select all text for easy editing
+            manualQuestionInput.select();
         }
 
         askManualQuestionBtn.onclick = submitManualQuestion;
@@ -1673,7 +2317,26 @@
             docsPanel.classList.toggle('hidden', !showDocs);
             docsBtn.classList.toggle('active', showDocs);
         };
-        
+
+        // Clear conversation button
+        const clearConversationBtn = document.getElementById('clearConversationBtn');
+        clearConversationBtn.onclick = () => {
+            if (confirm('Clear all transcript and detected questions?')) {
+                // Clear local state
+                transcriptBox.innerHTML = '';
+                questionsList.innerHTML = '';
+                questionsSection.classList.add('hidden');
+                answerPanel.classList.add('hidden');
+                lastFinalTranscript = '';
+                selectedTranscriptEntries.clear();
+
+                // Clear server state
+                if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'clear' }));
+                }
+            }
+        };
+
         minimizeBtn.onclick = () => {
             isMinimized = !isMinimized;
             if (isMinimized) {
@@ -1745,10 +2408,20 @@
             if (file) uploadDocument(file);
             e.target.value = '';
         };
-        
-        // Initialize
-        connectClient();
-        loadDocuments();
+
+        // Login button handler
+        if (loginBtn) {
+            loginBtn.onclick = signIn;
+        }
+
+        // Initialize app after authentication
+        function initApp() {
+            connectClient();
+            loadDocuments();
+        }
+
+        // Start authentication flow on page load
+        initAuth();
     </script>
 </body>
 </html>
