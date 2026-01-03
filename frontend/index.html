@@ -1787,11 +1787,15 @@
 
                 audioWs.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
-                    console.log('Audio WebSocket message:', msg.type);
+                    console.log('Audio WebSocket message:', msg.type, msg);
                     if (msg.type === 'connecting') {
                         statusText.textContent = 'Connecting...';
                     } else if (msg.type === 'ready') {
                         startRecording(stream);
+                    } else if (msg.type === 'error') {
+                        console.error('Server error:', msg.message);
+                        statusText.textContent = 'Error: ' + msg.message;
+                        stopListening();
                     }
                 };
 

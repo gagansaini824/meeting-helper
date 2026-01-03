@@ -924,7 +924,11 @@ async def audio_websocket(websocket: WebSocket, token: str = Query(None)):
     except WebSocketDisconnect:
         logger.info("Audio WebSocket disconnected")
     except Exception as e:
-        logger.error(f"Audio WebSocket error: {e}")
+        logger.error(f"Audio WebSocket error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
     finally:
         if dg_connection:
             # SDK v2 finish() is not async
