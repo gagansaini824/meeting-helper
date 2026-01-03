@@ -200,7 +200,6 @@ async def global_periodic_question_detection():
     logger.info("✓ Global periodic question detection started")
     while True:
         await asyncio.sleep(4)
-        logger.info("→ Running Haiku question detection...")
         await detect_questions_with_haiku()
 
 async def global_periodic_suggestions():
