@@ -175,42 +175,33 @@ class DatabaseManager:
 
     def get_database_url(self) -> str:
         """Get database URL from environment"""
-        # Check for PostgreSQL URL first
         postgres_url = os.getenv("DATABASE_URL")
-        if postgres_url:
-            # Handle Heroku-style postgres:// URLs
-            if postgres_url.startswith("postgres://"):
-                postgres_url = postgres_url.replace("postgres://", "postgresql+asyncpg://", 1)
-            elif postgres_url.startswith("postgresql://"):
-                postgres_url = postgres_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            return postgres_url
+        if not postgres_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Please set it to your PostgreSQL connection string."
+            )
 
-        # Fall back to SQLite
-        sqlite_path = os.getenv("SQLITE_PATH", "data/meeting_assistant.db")
-        return f"sqlite+aiosqlite:///{sqlite_path}"
+        # Handle Heroku/Railway-style postgres:// URLs
+        if postgres_url.startswith("postgres://"):
+            postgres_url = postgres_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif postgres_url.startswith("postgresql://"):
+            postgres_url = postgres_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        return postgres_url
 
     async def init_db(self):
         """Initialize database connection and create tables"""
         db_url = self.get_database_url()
-        is_sqlite = db_url.startswith("sqlite")
-        self._is_postgres = not is_sqlite
+        self._is_postgres = True
 
-        if is_sqlite:
-            # SQLite-specific settings
-            self._engine = create_async_engine(
-                db_url,
-                echo=False,
-                connect_args={"check_same_thread": False},
-                poolclass=StaticPool
-            )
-        else:
-            # PostgreSQL settings
-            self._engine = create_async_engine(
-                db_url,
-                echo=False,
-                pool_size=5,
-                max_overflow=10
-            )
+        # PostgreSQL settings
+        self._engine = create_async_engine(
+            db_url,
+            echo=False,
+            pool_size=5,
+            max_overflow=10
+        )
 
         self._session_factory = sessionmaker(
             self._engine,
@@ -218,20 +209,19 @@ class DatabaseManager:
             expire_on_commit=False
         )
 
-        # For PostgreSQL, enable pgvector extension
-        if self._is_postgres:
-            async with self._engine.begin() as conn:
-                try:
-                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                    print("✓ pgvector extension enabled")
-                except Exception as e:
-                    print(f"Note: pgvector extension not available: {e}")
+        # Enable pgvector extension
+        async with self._engine.begin() as conn:
+            try:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                print("✓ pgvector extension enabled")
+            except Exception as e:
+                print(f"Note: pgvector extension not available: {e}")
 
         # Create tables
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-        print(f"Database initialized: {'SQLite' if is_sqlite else 'PostgreSQL'}")
+        print("Database initialized: PostgreSQL")
 
     @property
     def is_postgres(self) -> bool:
@@ -371,75 +361,35 @@ async def search_similar_chunks(
 ) -> List[dict]:
     """
     Search for similar document chunks using pgvector.
-    Falls back to JSON-based search for SQLite.
     """
-    from sqlalchemy import select
-    import numpy as np
-
     async with db.session() as session:
-        if db.is_postgres:
-            # Use pgvector for efficient similarity search
-            embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
-            query = text("""
-                SELECT dc.id, dc.content, dc.chunk_index, d.name as document_name, d.id as document_id,
-                       dc.embedding <=> :embedding::vector as distance
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                WHERE d.user_id = :user_id AND dc.embedding IS NOT NULL
-                ORDER BY dc.embedding <=> :embedding::vector
-                LIMIT :limit
-            """)
-            result = await session.execute(
-                query,
-                {"user_id": user_id, "embedding": embedding_str, "limit": limit}
-            )
-            rows = result.fetchall()
-            return [
-                {
-                    "id": row.id,
-                    "content": row.content,
-                    "chunk_index": row.chunk_index,
-                    "document_name": row.document_name,
-                    "document_id": row.document_id,
-                    "distance": row.distance
-                }
-                for row in rows
-            ]
-        else:
-            # SQLite fallback: load all chunks and compute similarity in Python
-            query = select(DocumentChunk, Document).join(
-                Document, DocumentChunk.document_id == Document.id
-            ).where(Document.user_id == user_id)
-
-            result = await session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return []
-
-            # Compute cosine similarity
-            query_vec = np.array(query_embedding)
-            scored = []
-
-            for chunk, doc in rows:
-                if chunk.embedding:
-                    chunk_vec = np.array(chunk.embedding)
-                    # Cosine similarity
-                    similarity = np.dot(query_vec, chunk_vec) / (
-                        np.linalg.norm(query_vec) * np.linalg.norm(chunk_vec) + 1e-8
-                    )
-                    scored.append({
-                        "id": chunk.id,
-                        "content": chunk.content,
-                        "chunk_index": chunk.chunk_index,
-                        "document_name": doc.name,
-                        "document_id": doc.id,
-                        "distance": 1 - similarity  # Convert to distance
-                    })
-
-            # Sort by distance (lower is better)
-            scored.sort(key=lambda x: x["distance"])
-            return scored[:limit]
+        # Use pgvector for efficient similarity search
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+        query = text("""
+            SELECT dc.id, dc.content, dc.chunk_index, d.name as document_name, d.id as document_id,
+                   dc.embedding <=> :embedding::vector as distance
+            FROM document_chunks dc
+            JOIN documents d ON dc.document_id = d.id
+            WHERE d.user_id = :user_id AND dc.embedding IS NOT NULL
+            ORDER BY dc.embedding <=> :embedding::vector
+            LIMIT :limit
+        """)
+        result = await session.execute(
+            query,
+            {"user_id": user_id, "embedding": embedding_str, "limit": limit}
+        )
+        rows = result.fetchall()
+        return [
+            {
+                "id": row.id,
+                "content": row.content,
+                "chunk_index": row.chunk_index,
+                "document_name": row.document_name,
+                "document_id": row.document_id,
+                "distance": row.distance
+            }
+            for row in rows
+        ]
 
 
 async def save_document_to_db(
@@ -470,35 +420,22 @@ async def save_document_to_db(
             )
             session.add(doc)
 
-        # Add chunks with embeddings
+        # Add chunks with embeddings (PostgreSQL with pgvector)
         for i, chunk_data in enumerate(chunks):
             chunk_id = str(uuid.uuid4())
-
-            if db.is_postgres:
-                # For PostgreSQL, store embedding as vector
-                embedding = chunk_data.get("embedding")
-                if embedding:
-                    embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-                    await session.execute(text("""
-                        INSERT INTO document_chunks (id, document_id, content, embedding, chunk_index)
-                        VALUES (:id, :doc_id, :content, :embedding::vector, :idx)
-                    """), {
-                        "id": chunk_id,
-                        "doc_id": doc_id,
-                        "content": chunk_data["content"],
-                        "embedding": embedding_str,
-                        "idx": i
-                    })
-            else:
-                # For SQLite, store embedding as JSON
-                chunk = DocumentChunk(
-                    id=chunk_id,
-                    document_id=doc_id,
-                    content=chunk_data["content"],
-                    embedding=chunk_data.get("embedding"),
-                    chunk_index=i
-                )
-                session.add(chunk)
+            embedding = chunk_data.get("embedding")
+            if embedding:
+                embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+                await session.execute(text("""
+                    INSERT INTO document_chunks (id, document_id, content, embedding, chunk_index)
+                    VALUES (:id, :doc_id, :content, :embedding::vector, :idx)
+                """), {
+                    "id": chunk_id,
+                    "doc_id": doc_id,
+                    "content": chunk_data["content"],
+                    "embedding": embedding_str,
+                    "idx": i
+                })
 
         await session.commit()
         return doc
