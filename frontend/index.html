@@ -1750,7 +1750,9 @@
         
         // Audio streaming
         async function startListening() {
+            console.log('startListening called');
             try {
+                console.log('Requesting microphone access...');
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         channelCount: 1,
@@ -1770,15 +1772,17 @@
 
                 // Get auth token for audio WebSocket
                 const token = await getAuthToken();
+                console.log('Got auth token:', token ? 'yes' : 'no');
                 const wsUrl = token
                     ? `${WS_BASE}/ws/audio?token=${encodeURIComponent(token)}`
                     : `${WS_BASE}/ws/audio`;
+                console.log('Connecting to audio WebSocket:', wsUrl);
 
                 isAudioIntentionalClose = false;
                 audioWs = new WebSocket(wsUrl);
 
                 audioWs.onopen = () => {
-                    console.log('Audio WebSocket connected');
+                    console.log('Audio WebSocket connected successfully');
                 };
 
                 audioWs.onmessage = (event) => {
