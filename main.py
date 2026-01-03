@@ -769,6 +769,9 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None)):
 async def audio_websocket(websocket: WebSocket, token: str = Query(None)):
     await websocket.accept()
 
+    # Send immediate acknowledgment so client knows connection is alive
+    await websocket.send_json({"type": "connecting", "message": "Connecting to transcription service..."})
+
     # Get user ID for this connection
     user_id = await get_user_id_from_websocket(websocket, token)
     logger.info(f"Audio WebSocket connected: user_id={user_id}")
@@ -784,6 +787,7 @@ async def audio_websocket(websocket: WebSocket, token: str = Query(None)):
 
     try:
         # Create a websocket connection to Deepgram
+        logger.info("Connecting to Deepgram...")
         dg_connection = await deepgram.transcription.live({
             "model": "nova-2",
             "language": "en",
