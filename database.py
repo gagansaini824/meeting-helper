@@ -99,13 +99,12 @@ class Document(Base):
 
 
 class DocumentChunk(Base):
-    """Document chunks with embeddings for semantic search"""
+    """Document chunks stored in PostgreSQL (embeddings stored in Pinecone)"""
     __tablename__ = "document_chunks"
 
     id = Column(String(255), primary_key=True)
     document_id = Column(String(255), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(JSON, nullable=True)  # Store as JSON array for SQLite compatibility
     chunk_index = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -209,13 +208,6 @@ class DatabaseManager:
             expire_on_commit=False
         )
 
-        # Enable pgvector extension
-        async with self._engine.begin() as conn:
-            try:
-                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                print("✓ pgvector extension enabled")
-            except Exception as e:
-                print(f"Note: pgvector extension not available: {e}")
 
         # Create tables
         async with self._engine.begin() as conn:
@@ -352,44 +344,8 @@ async def log_audit(
         await session.commit()
 
 
-# ============= Vector Search Functions (PostgreSQL with pgvector) =============
-
-async def search_similar_chunks(
-    user_id: str,
-    query_embedding: List[float],
-    limit: int = 5
-) -> List[dict]:
-    """
-    Search for similar document chunks using pgvector.
-    """
-    async with db.session() as session:
-        # Use pgvector for efficient similarity search
-        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
-        query = text("""
-            SELECT dc.id, dc.content, dc.chunk_index, d.name as document_name, d.id as document_id,
-                   dc.embedding <=> :embedding::vector as distance
-            FROM document_chunks dc
-            JOIN documents d ON dc.document_id = d.id
-            WHERE d.user_id = :user_id AND dc.embedding IS NOT NULL
-            ORDER BY dc.embedding <=> :embedding::vector
-            LIMIT :limit
-        """)
-        result = await session.execute(
-            query,
-            {"user_id": user_id, "embedding": embedding_str, "limit": limit}
-        )
-        rows = result.fetchall()
-        return [
-            {
-                "id": row.id,
-                "content": row.content,
-                "chunk_index": row.chunk_index,
-                "document_name": row.document_name,
-                "document_id": row.document_id,
-                "distance": row.distance
-            }
-            for row in rows
-        ]
+# ============= Document Management Functions =============
+# Note: Vector search is handled by Pinecone (see vector_store.py)
 
 
 async def save_document_to_db(
@@ -399,7 +355,10 @@ async def save_document_to_db(
     content: str,
     chunks: List[dict]
 ) -> Document:
-    """Save a document and its chunks to the database"""
+    """
+    Save a document and its chunks to the database.
+    Note: Embeddings are stored in Pinecone, not PostgreSQL.
+    """
     from sqlalchemy import select
     import uuid
 
@@ -420,22 +379,16 @@ async def save_document_to_db(
             )
             session.add(doc)
 
-        # Add chunks with embeddings (PostgreSQL with pgvector)
+        # Add chunks (embeddings stored in Pinecone separately)
         for i, chunk_data in enumerate(chunks):
             chunk_id = str(uuid.uuid4())
-            embedding = chunk_data.get("embedding")
-            if embedding:
-                embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-                await session.execute(text("""
-                    INSERT INTO document_chunks (id, document_id, content, embedding, chunk_index)
-                    VALUES (:id, :doc_id, :content, :embedding::vector, :idx)
-                """), {
-                    "id": chunk_id,
-                    "doc_id": doc_id,
-                    "content": chunk_data["content"],
-                    "embedding": embedding_str,
-                    "idx": i
-                })
+            chunk = DocumentChunk(
+                id=chunk_id,
+                document_id=doc_id,
+                content=chunk_data["content"],
+                chunk_index=i
+            )
+            session.add(chunk)
 
         await session.commit()
         return doc
