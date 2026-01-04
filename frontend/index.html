@@ -3527,31 +3527,57 @@
 
         // Initialize app after authentication
         async function initApp() {
+            console.log('[initApp] Starting, authToken:', authToken ? 'present' : 'missing');
             loadDocuments();
             startIdleCheck();
 
             // Load sessions first
             try {
+                console.log('[initApp] Fetching sessions...');
                 const res = await fetch('/api/sessions', {
                     headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
                 });
+                console.log('[initApp] Sessions response status:', res.status);
                 const data = await res.json();
+                console.log('[initApp] Sessions data:', data);
                 sessions = data.sessions || [];
 
                 // If there are existing sessions, use the most recent one
                 if (sessions.length > 0) {
                     currentSessionId = sessions[0].id;
-                    console.log('Using existing session:', currentSessionId);
+                    console.log('[initApp] Using existing session:', currentSessionId);
+                } else {
+                    console.log('[initApp] No existing sessions, creating new one...');
+                    // Auto-create a session if none exist
+                    const createRes = await fetch('/api/sessions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                        },
+                        body: JSON.stringify({ title: null })
+                    });
+                    if (createRes.ok) {
+                        const newSession = await createRes.json();
+                        currentSessionId = newSession.id;
+                        sessions = [newSession];
+                        console.log('[initApp] Created new session:', currentSessionId);
+                    } else {
+                        console.error('[initApp] Failed to create session:', createRes.status);
+                    }
                 }
 
                 renderSidebarSessions();
             } catch (error) {
-                console.error('Failed to load sessions:', error);
+                console.error('[initApp] Failed to load sessions:', error);
             }
 
             // Connect to client WebSocket if we have a session
+            console.log('[initApp] currentSessionId before connect:', currentSessionId);
             if (currentSessionId) {
                 await connectClient();
+            } else {
+                console.warn('[initApp] No session available, skipping WebSocket connection');
             }
         }
 
