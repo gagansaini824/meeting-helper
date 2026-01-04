@@ -31,6 +31,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+# Import database functions for persistence
+from database import save_document_to_db, delete_document_from_db, log_usage, log_audit
+
 
 class FileType(str, Enum):
     """Supported file types"""
@@ -161,6 +164,12 @@ class VectorDocument:
     metadata: DocumentMetadata
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
+    chunks: List[Dict[str, Any]] = field(default_factory=list)  # For tracking chunk data
+
+    @property
+    def uploaded_at(self) -> datetime:
+        """Alias for created_at for compatibility"""
+        return self.created_at
 
 
 @dataclass
@@ -356,6 +365,7 @@ class PineconeVectorStore:
         user_id: str,
         name: str,
         content: str,
+        session_id: str,
         file_name: Optional[str] = None,
         file_type: Optional[str] = None,
         tags: Optional[List[str]] = None,
@@ -369,6 +379,7 @@ class PineconeVectorStore:
             user_id: User's unique identifier (used as Pinecone namespace)
             name: Display name for the document
             content: Full text content of the document
+            session_id: Session ID where document is being uploaded (required)
             file_name: Original file name (used for deletion by name)
             file_type: File type (pdf, docx, etc.) - auto-detected if not provided
             tags: List of tags for filtering
@@ -480,6 +491,49 @@ class PineconeVectorStore:
                 batch = vectors[i:i + batch_size]
                 index.upsert(vectors=batch, namespace=user_id)
 
+        # Store chunks in document for reference
+        document.chunks = text_chunks
+
+        # Save to PostgreSQL database for persistence (metadata only, no content)
+        try:
+            await save_document_to_db(
+                user_id=user_id,
+                doc_id=doc_id,
+                name=name,
+                file_type=actual_file_type,
+                size_bytes=len(content.encode('utf-8')),
+                chunk_count=total_chunks,
+                session_id=session_id,
+                pinecone_namespace=user_id
+            )
+            print(f"✓ Document {doc_id} saved to PostgreSQL (metadata only)")
+
+            # Log usage for embeddings
+            await log_usage(
+                user_id=user_id,
+                service="openai",
+                operation="embedding",
+                tokens=len(content.split()) * len(text_chunks),  # Approximate token count
+                session_id=session_id
+            )
+
+            # Audit log for document upload
+            await log_audit(
+                action="document_upload",
+                user_id=user_id,
+                resource_type="document",
+                resource_id=doc_id,
+                extra_data={
+                    "name": name,
+                    "file_type": actual_file_type,
+                    "size_bytes": len(content.encode('utf-8')),
+                    "chunks": total_chunks,
+                    "session_id": session_id
+                }
+            )
+        except Exception as e:
+            print(f"Warning: Failed to save document to PostgreSQL: {e}")
+
         return document
 
     async def search(
@@ -589,6 +643,21 @@ class PineconeVectorStore:
             # Remove from local cache
             if user_id in self._doc_metadata_cache:
                 self._doc_metadata_cache[user_id].pop(document_id, None)
+
+            # Delete from PostgreSQL database
+            try:
+                await delete_document_from_db(user_id, document_id)
+                print(f"✓ Document {document_id} deleted from PostgreSQL")
+
+                # Audit log for document deletion
+                await log_audit(
+                    action="document_delete",
+                    user_id=user_id,
+                    resource_type="document",
+                    resource_id=document_id
+                )
+            except Exception as db_err:
+                print(f"Warning: Failed to delete document from PostgreSQL: {db_err}")
 
             return True
         except Exception as e:
