@@ -563,30 +563,20 @@
         }
 
         .mobile-view-assistant .overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 60px !important;
             display: flex !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 0 !important;
+            z-index: 100 !important;
         }
 
         .mobile-view-assistant .main-content {
             display: none !important;
-        }
-
-        .mobile-view-docs .sidebar {
-            transform: translateX(0) !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            z-index: 100;
-        }
-
-        .mobile-view-docs .overlay {
-            display: none !important;
-        }
-
-        .mobile-view-docs .main-content {
-            display: none !important;
-        }
-
-        .mobile-view-docs .sidebar-docs-section {
-            display: block !important;
         }
 
         /* Sidebar Documents Section - hidden on desktop, shown on mobile */
@@ -1991,13 +1981,6 @@
                     <line x1="12" y1="19" x2="12" y2="22"/>
                 </svg>
                 <span>Assistant</span>
-            </button>
-            <button class="mobile-nav-tab" id="mobileNavDocs" data-view="docs">
-                <svg class="icon-sm" viewBox="0 0 24 24">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                </svg>
-                <span>Documents</span>
             </button>
         </div>
     </nav>
@@ -3677,44 +3660,31 @@
         // Mobile bottom navigation
         const mobileNavSessions = document.getElementById('mobileNavSessions');
         const mobileNavAssistant = document.getElementById('mobileNavAssistant');
-        const mobileNavDocs = document.getElementById('mobileNavDocs');
         const mobileBottomNav = document.getElementById('mobileBottomNav');
 
         function setMobileView(view) {
             // Only apply on mobile
             if (window.innerWidth > 768) return;
 
+            console.log('[Mobile] Setting view to:', view);
+
             // Update nav tab active states
             mobileNavSessions.classList.toggle('active', view === 'sessions');
             mobileNavAssistant.classList.toggle('active', view === 'assistant');
-            mobileNavDocs.classList.toggle('active', view === 'docs');
 
             // Update body classes for CSS view switching
-            document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant', 'mobile-view-docs');
+            document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant');
             document.body.classList.add(`mobile-view-${view}`);
 
             if (view === 'sessions') {
                 sidebar.classList.add('open');
-                overlay.style.display = 'none';
             } else if (view === 'assistant') {
                 sidebar.classList.remove('open');
-                overlay.style.display = 'flex';
-            } else if (view === 'docs') {
-                // Show sidebar with docs section expanded
-                sidebar.classList.add('open');
-                overlay.style.display = 'none';
-                // Expand the docs section in sidebar
-                const sidebarDocsList = document.getElementById('sidebarDocsList');
-                sidebarDocsList.classList.remove('hidden');
-                // Scroll to docs section
-                const sidebarDocsSection = document.getElementById('sidebarDocsSection');
-                sidebarDocsSection.scrollIntoView({ behavior: 'smooth' });
             }
         }
 
         mobileNavSessions.onclick = () => setMobileView('sessions');
         mobileNavAssistant.onclick = () => setMobileView('assistant');
-        mobileNavDocs.onclick = () => setMobileView('docs');
 
         // Sidebar documents toggle
         const sidebarDocsToggle = document.getElementById('sidebarDocsToggle');
@@ -3979,14 +3949,12 @@
             if (window.innerWidth <= 768) {
                 // Entering mobile mode
                 if (!document.body.classList.contains('mobile-view-sessions') &&
-                    !document.body.classList.contains('mobile-view-assistant') &&
-                    !document.body.classList.contains('mobile-view-docs')) {
+                    !document.body.classList.contains('mobile-view-assistant')) {
                     setMobileView('assistant');
                 }
             } else {
                 // Entering desktop mode - remove mobile classes
-                document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant', 'mobile-view-docs');
-                overlay.style.display = '';
+                document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant');
                 sidebar.classList.remove('open');
             }
         });
