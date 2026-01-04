@@ -1052,6 +1052,59 @@
             color: rgba(245, 158, 11, 1);
         }
 
+        /* Inline question edit box */
+        .inline-edit-box {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .inline-edit-box input {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+        }
+
+        .inline-edit-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .inline-edit-box button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.75rem;
+            transition: background 0.2s;
+        }
+
+        .inline-edit-box button:hover {
+            background: var(--accent-hover);
+        }
+
+        .inline-edit-box .cancel-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.5rem 0.75rem;
+        }
+
+        .inline-edit-box .cancel-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
         .suggestions-section .section-label {
             color: var(--text-secondary);
         }
@@ -1220,6 +1273,8 @@
         .answer-text {
             font-size: 0.8125rem;
             line-height: 1.5;
+            max-height: 250px;
+            overflow-y: auto;
         }
 
         .answer-footer {
@@ -3437,14 +3492,40 @@
             }
 
             questionsSection.classList.remove('hidden');
-            questionsList.innerHTML = questions.map(q => `
-                <div class="question-card" onclick="askQuestion('${escapeHtml(q.text)}')">
-                    <div class="question-text">${escapeHtml(q.text)}</div>
-                    <div class="question-meta">
-                        <span>Click for answer</span>
-                    </div>
-                </div>
-            `).join('');
+            questionsList.innerHTML = '';
+
+            questions.forEach(q => {
+                const card = document.createElement('div');
+                card.className = 'question-card';
+
+                const questionText = document.createElement('div');
+                questionText.className = 'question-text';
+                questionText.textContent = q.text;
+                questionText.onclick = () => askQuestion(q.text);
+
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'question-meta';
+
+                const answerSpan = document.createElement('span');
+                answerSpan.textContent = 'Click for answer';
+                answerSpan.onclick = () => askQuestion(q.text);
+                answerSpan.style.cursor = 'pointer';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'edit-question-btn';
+                editBtn.title = 'Edit question';
+                editBtn.innerHTML = `<svg class="icon-xs" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+                editBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    editQuestion(q.text, card);
+                };
+
+                metaDiv.appendChild(answerSpan);
+                metaDiv.appendChild(editBtn);
+                card.appendChild(questionText);
+                card.appendChild(metaDiv);
+                questionsList.appendChild(card);
+            });
         }
         
         function addQuestion(q) {
@@ -3479,7 +3560,7 @@
             editBtn.innerHTML = `<svg class="icon-xs" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
             editBtn.onclick = (e) => {
                 e.stopPropagation();
-                editQuestion(q.text);
+                editQuestion(q.text, card);
             };
 
             metaDiv.appendChild(answerSpan);
@@ -3594,14 +3675,56 @@
             }
         }
 
-        function editQuestion(questionText) {
-            // Show the manual question input
-            showManualQuestionInput();
-            // Paste the question into the input
-            manualQuestionInput.value = questionText;
-            manualQuestionInput.focus();
-            // Select all text for easy editing
-            manualQuestionInput.select();
+        function editQuestion(questionText, cardElement) {
+            // Remove any existing inline edit boxes
+            const existingEditBox = document.querySelector('.inline-edit-box');
+            if (existingEditBox) {
+                existingEditBox.remove();
+            }
+
+            // Create inline edit box
+            const editBox = document.createElement('div');
+            editBox.className = 'inline-edit-box';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = questionText;
+            input.placeholder = 'Edit your question...';
+
+            const askBtn = document.createElement('button');
+            askBtn.textContent = 'Ask';
+            askBtn.onclick = () => {
+                const newQuestion = input.value.trim();
+                if (newQuestion) {
+                    askQuestion(newQuestion);
+                    editBox.remove();
+                }
+            };
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'cancel-btn';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => editBox.remove();
+
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    askBtn.click();
+                } else if (e.key === 'Escape') {
+                    editBox.remove();
+                }
+            };
+
+            editBox.appendChild(input);
+            editBox.appendChild(askBtn);
+            editBox.appendChild(cancelBtn);
+
+            // Insert after the card
+            cardElement.appendChild(editBox);
+
+            // Focus without selecting
+            input.focus();
+            // Move cursor to end
+            input.setSelectionRange(input.value.length, input.value.length);
         }
 
         askManualQuestionBtn.onclick = submitManualQuestion;
