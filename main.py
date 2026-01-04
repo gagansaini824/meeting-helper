@@ -1105,6 +1105,8 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
                 # Client is switching to a different session
                 new_session_id = data.get("session_id")
                 if new_session_id and new_session_id != current_session_id:
+                    logger.info(f"Switching session from {current_session_id} to {new_session_id}")
+
                     # Save current session before switching
                     if current_session_id:
                         await session_manager.save_session(current_session_id)
@@ -1113,11 +1115,12 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
                     # Load new session
                     current_session_id = new_session_id
                     session_state = await session_manager.load_session(new_session_id, user_id)
-                    session_manager.add_client_to_session(websocket, new_session_id)
-                    session_manager.set_user_active_session(user_id, new_session_id)
 
-                    # Send new session data
                     if session_state:
+                        session_manager.add_client_to_session(websocket, new_session_id)
+                        session_manager.set_user_active_session(user_id, new_session_id)
+
+                        # Send new session data
                         await websocket.send_json({
                             "type": "session_loaded",
                             "data": {
@@ -1125,6 +1128,17 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
                                 "questions": session_state.detected_questions,
                                 "suggestions": session_state.suggestions,
                                 "sessionId": new_session_id
+                            }
+                        })
+                        logger.info(f"Session {new_session_id} loaded: {len(session_state.transcript)} transcript entries, {len(session_state.detected_questions)} questions")
+                    else:
+                        # Session doesn't exist in database
+                        logger.warning(f"Session {new_session_id} not found in database")
+                        await websocket.send_json({
+                            "type": "session_not_found",
+                            "data": {
+                                "sessionId": new_session_id,
+                                "message": "Session not found"
                             }
                         })
 

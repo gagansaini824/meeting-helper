@@ -2630,11 +2630,26 @@
 
                 case 'session_loaded':
                     // Session data loaded after switch
+                    console.log('[handleMessage] Session loaded:', msg.data.sessionId, 'transcript:', msg.data.transcript?.length, 'questions:', msg.data.questions?.length);
                     currentSessionId = msg.data.sessionId;
                     renderTranscript(msg.data.transcript);
                     renderQuestions(msg.data.questions);
                     renderSuggestions(msg.data.suggestions);
                     updateCurrentSessionUI();
+                    break;
+
+                case 'session_not_found':
+                    // Session doesn't exist - remove from list and show error
+                    console.warn('[handleMessage] Session not found:', msg.data.sessionId);
+                    sessions = sessions.filter(s => s.id !== msg.data.sessionId);
+                    renderSidebarSessions();
+                    alert('Session not found. It may have been deleted.');
+                    // Switch to first available session or create new one
+                    if (sessions.length > 0) {
+                        switchSession(sessions[0].id);
+                    } else {
+                        createNewSession();
+                    }
                     break;
 
                 case 'session_created':
@@ -3423,15 +3438,34 @@
         async function switchSession(sessionId) {
             if (sessionId === currentSessionId) return;
 
+            console.log('[switchSession] Switching from', currentSessionId, 'to', sessionId);
+
             // Stop audio when switching sessions
             if (isListening) {
                 stopListening();
                 statusText.textContent = 'Session changed - click to start';
             }
 
-            // Update current session and reconnect with new session_id
+            // Clear UI before loading new session
+            clearUI();
+
+            // Update current session ID
+            const oldSessionId = currentSessionId;
             currentSessionId = sessionId;
-            await connectClient();
+
+            // If WebSocket is open, send switch_session message
+            if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                console.log('[switchSession] Sending switch_session message');
+                clientWs.send(JSON.stringify({
+                    type: 'switch_session',
+                    session_id: sessionId
+                }));
+            } else {
+                // WebSocket not open, connect fresh
+                console.log('[switchSession] WebSocket not open, connecting fresh');
+                await connectClient();
+            }
+
             updateCurrentSessionUI();
 
             // On mobile, switch to assistant view after selecting a session
