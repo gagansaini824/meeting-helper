@@ -567,37 +567,43 @@
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            bottom: 60px !important;
+            /* Use height instead of bottom for better Chrome iOS support */
+            bottom: auto !important;
+            height: calc(100% - 60px) !important;
+            height: calc(100% - 60px - env(safe-area-inset-bottom, 0px)) !important;
             display: flex !important;
             flex-direction: column !important;
             width: 100% !important;
             max-width: 100% !important;
-            max-height: calc(100vh - 60px) !important;
             border-radius: 0 !important;
             z-index: 100 !important;
             overflow: hidden !important;
         }
 
         .mobile-view-assistant .overlay-content {
-            flex: 1 !important;
+            flex: 1 1 auto !important;
             overflow-y: auto !important;
-            min-height: 0 !important; /* Important for flex child scrolling */
+            overflow-x: hidden !important;
+            min-height: 0 !important; /* Critical for flex child scrolling */
             padding-bottom: 1rem !important;
+            -webkit-overflow-scrolling: touch !important;
         }
 
         .mobile-view-assistant .transcript-section {
-            flex: 1 !important;
+            flex-shrink: 0 !important;
             display: flex !important;
             flex-direction: column !important;
             min-height: 100px !important;
+            max-height: 40vh !important;
             overflow: hidden !important;
         }
 
         .mobile-view-assistant .transcript-box {
-            flex: 1 !important;
-            max-height: none !important;
+            flex: 1 1 auto !important;
+            max-height: calc(40vh - 50px) !important;
             min-height: 80px !important;
             overflow-y: auto !important;
+            overflow-x: hidden !important;
             -webkit-overflow-scrolling: touch !important;
         }
 
