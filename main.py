@@ -345,12 +345,14 @@ class SessionManager:
         self._session_clients[session_id].add(client)
         self._client_sessions[client] = session_id
         self.connected_clients.add(client)
+        logger.info(f"[SessionManager] Added client to session {session_id}, total clients for session: {len(self._session_clients[session_id])}")
 
     def remove_client(self, client: WebSocket):
         """Remove client from session tracking"""
         session_id = self._client_sessions.pop(client, None)
         if session_id and session_id in self._session_clients:
             self._session_clients[session_id].discard(client)
+            logger.info(f"[SessionManager] Removed client from session {session_id}, remaining clients: {len(self._session_clients[session_id])}")
         self.connected_clients.discard(client)
 
     def get_session_clients(self, session_id: str) -> set[WebSocket]:
