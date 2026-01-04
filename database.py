@@ -127,6 +127,7 @@ class MeetingSession(Base):
     detected_questions = Column(JSON, default=list)  # [{text: str, timestamp: str, answered: bool}]
     answers = Column(JSON, default=list)  # [{question: str, answer: str, timestamp: str, sources: []}]
     document_ids = Column(JSON, default=list)  # [doc_id, ...] - documents used in this session
+    conversation_summaries = Column(JSON, default=list)  # [{timestamp: str, summary: str, transcript_length: int}]
 
     # Full transcript text for easy search
     full_transcript = Column(Text, default="")
@@ -711,6 +712,7 @@ async def update_session(
     answers: Optional[list] = None,
     document_ids: Optional[list] = None,
     full_transcript: Optional[str] = None,
+    conversation_summaries: Optional[list] = None,
     ended_at: Optional[datetime] = None
 ) -> Optional[MeetingSession]:
     """Update a session's data"""
@@ -742,6 +744,8 @@ async def update_session(
             meeting_session.document_ids = document_ids
         if full_transcript is not None:
             meeting_session.full_transcript = full_transcript
+        if conversation_summaries is not None:
+            meeting_session.conversation_summaries = conversation_summaries
         if ended_at is not None:
             meeting_session.ended_at = ended_at
 

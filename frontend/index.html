@@ -1175,7 +1175,82 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
+
+        /* Summaries Section */
+        .summaries-section {
+            border-top: 1px solid var(--border);
+            padding-top: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .summaries-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font-family: inherit;
+            transition: color 0.2s;
+        }
+
+        .summaries-toggle:hover {
+            color: var(--text-primary);
+        }
+
+        .summaries-toggle .icon-xs {
+            transition: transform 0.2s;
+        }
+
+        .summaries-toggle.open .icon-xs {
+            transform: rotate(90deg);
+        }
+
+        .summaries-box {
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border-radius: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .summaries-empty {
+            font-style: italic;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .summary-item {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 0.5rem;
+            border-left: 3px solid var(--accent);
+        }
+
+        .summary-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .summary-header {
+            font-size: 0.625rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .summary-content {
+            white-space: pre-wrap;
+            font-size: 0.6875rem;
+        }
+
         /* Transcript */
         .transcript-toggle {
             display: flex;
@@ -2223,6 +2298,20 @@
                 </div>
             </div>
 
+            <!-- Conversation Summaries -->
+            <div class="summaries-section">
+                <button class="summaries-toggle" id="summariesToggle">
+                    <svg class="icon-xs" viewBox="0 0 24 24" id="summariesChevron">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                    Summaries (<span id="summaryCount">0</span>)
+                </button>
+                <div class="summaries-box hidden" id="summariesBox">
+                    <div class="summaries-empty" id="summariesEmpty">No summaries yet. Summaries are generated every 5 minutes during active conversation.</div>
+                    <div id="summariesList"></div>
+                </div>
+            </div>
+
             <!-- Transcript -->
             <div class="transcript-section">
                 <button class="transcript-toggle" id="transcriptToggle">
@@ -2301,6 +2390,11 @@
         const generateQuestionBtn = document.getElementById('generateQuestionBtn');
         const clearSelectionBtn = document.getElementById('clearSelectionBtn');
         const overlayContent = document.getElementById('overlayContent');
+        const summariesToggle = document.getElementById('summariesToggle');
+        const summariesBox = document.getElementById('summariesBox');
+        const summariesList = document.getElementById('summariesList');
+        const summariesEmpty = document.getElementById('summariesEmpty');
+        const summaryCount = document.getElementById('summaryCount');
 
         // Sidebar DOM elements
         const sidebar = document.getElementById('sidebar');
@@ -2654,6 +2748,7 @@
                     renderTranscript(msg.data.transcript);
                     renderQuestions(msg.data.questions);
                     renderSuggestions(msg.data.suggestions);
+                    renderSummaries(msg.data.summaries || []);
                     if (msg.data.sessionId) {
                         currentSessionId = msg.data.sessionId;
                         updateCurrentSessionUI();
@@ -2667,6 +2762,7 @@
                     renderTranscript(msg.data.transcript);
                     renderQuestions(msg.data.questions);
                     renderSuggestions(msg.data.suggestions);
+                    renderSummaries(msg.data.summaries || []);
                     updateCurrentSessionUI();
                     break;
 
@@ -2733,6 +2829,12 @@
                             answerText.innerHTML = `<div style="color: var(--danger);">Error: ${msg.data.error}</div>`;
                         }
                     }
+                    break;
+
+                case 'conversation_summary':
+                    // New summary generated - update summaries list
+                    console.log('[handleMessage] New summary received:', msg.data);
+                    renderSummaries(msg.data.summaries || []);
                     break;
 
                 case 'cleared':
@@ -3677,8 +3779,30 @@
             questionsSection.classList.add('hidden');
             suggestionsSection.classList.add('hidden');
             answerPanel.classList.add('hidden');
+            // Clear summaries
+            renderSummaries([]);
         }
-        
+
+        // Render conversation summaries
+        function renderSummaries(summaries) {
+            const count = summaries ? summaries.length : 0;
+            summaryCount.textContent = count;
+
+            if (count === 0) {
+                summariesEmpty.classList.remove('hidden');
+                summariesList.innerHTML = '';
+                return;
+            }
+
+            summariesEmpty.classList.add('hidden');
+            summariesList.innerHTML = summaries.map((s, i) => `
+                <div class="summary-item">
+                    <div class="summary-header">Summary ${i + 1} - ${new Date(s.timestamp).toLocaleString()}</div>
+                    <div class="summary-content">${escapeHtml(s.summary)}</div>
+                </div>
+            `).join('');
+        }
+
         function escapeHtml(str) {
             return str.replace(/[&<>"']/g, m => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -3811,6 +3935,12 @@
             showTranscript = !showTranscript;
             transcriptBox.classList.toggle('hidden', !showTranscript);
             transcriptActions.classList.toggle('hidden', !showTranscript || selectedTranscriptEntries.size === 0);
+        };
+
+        // Summaries toggle handler
+        summariesToggle.onclick = () => {
+            summariesBox.classList.toggle('hidden');
+            summariesToggle.classList.toggle('open');
         };
 
         generateQuestionBtn.onclick = async () => {

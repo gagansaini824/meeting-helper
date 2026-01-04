@@ -338,11 +338,12 @@ class SessionManager:
                 "transcript_entries": session_data.transcript_entries,
                 "full_transcript": session_data.full_transcript,
                 "detected_questions": session_data.detected_questions,
-                "answers": session_data.answers
+                "answers": session_data.answers,
+                "conversation_summaries": getattr(session_data, 'conversation_summaries', None) or []
             }
         )
         self._sessions[session_id] = state
-        logger.info(f"Loaded session {session_id} from database: {len(state.transcript)} transcript entries, {len(state.detected_questions)} questions")
+        logger.info(f"Loaded session {session_id} from database: {len(state.transcript)} transcript entries, {len(state.detected_questions)} questions, {len(state.conversation_summaries)} summaries")
         return state
 
     async def save_session(self, session_id: str) -> bool:
@@ -357,7 +358,8 @@ class SessionManager:
             transcript_entries=state.transcript,
             detected_questions=state.detected_questions,
             answers=state.answers,
-            full_transcript=state.full_transcript
+            full_transcript=state.full_transcript,
+            conversation_summaries=state.conversation_summaries
         )
         if result:
             state.dirty = False
@@ -506,13 +508,13 @@ async def global_periodic_conversation_summarization():
                     # Save session after adding summary
                     await session_manager.save_session(session_id)
 
-                    # Broadcast summary to clients
+                    # Broadcast all summaries to clients
                     await broadcast({
                         "type": "conversation_summary",
                         "data": {
-                            "summary": summary,
-                            "timestamp": datetime.now().isoformat(),
-                            "summary_count": len(state.conversation_summaries)
+                            "summaries": state.conversation_summaries,
+                            "latest_summary": summary,
+                            "timestamp": datetime.now().isoformat()
                         }
                     }, session_id)
 
@@ -1209,6 +1211,7 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
         "transcript": session_state.transcript,
         "questions": session_state.detected_questions,
         "suggestions": session_state.suggestions,
+        "summaries": session_state.conversation_summaries,
         "userId": user_id,
         "sessionId": current_session_id
     }
@@ -1263,6 +1266,7 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
                                 "transcript": session_state.transcript,
                                 "questions": session_state.detected_questions,
                                 "suggestions": session_state.suggestions,
+                                "summaries": session_state.conversation_summaries,
                                 "sessionId": new_session_id
                             }
                         })
