@@ -569,10 +569,36 @@
             right: 0 !important;
             bottom: 60px !important;
             display: flex !important;
+            flex-direction: column !important;
             width: 100% !important;
             max-width: 100% !important;
+            max-height: calc(100vh - 60px) !important;
             border-radius: 0 !important;
             z-index: 100 !important;
+            overflow: hidden !important;
+        }
+
+        .mobile-view-assistant .overlay-content {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            min-height: 0 !important; /* Important for flex child scrolling */
+            padding-bottom: 1rem !important;
+        }
+
+        .mobile-view-assistant .transcript-section {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 100px !important;
+            overflow: hidden !important;
+        }
+
+        .mobile-view-assistant .transcript-box {
+            flex: 1 !important;
+            max-height: none !important;
+            min-height: 80px !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
         }
 
         .mobile-view-assistant .main-content {
@@ -2199,7 +2225,7 @@
                     </svg>
                     Transcript
                 </button>
-                <div class="transcript-box hidden" id="transcriptBox"></div>
+                <div class="transcript-box" id="transcriptBox"></div>
                 <div class="transcript-actions hidden" id="transcriptActions">
                     <button id="generateQuestionBtn" disabled>
                         Generate Questions
@@ -2215,7 +2241,7 @@
     <script>
         // State
         let isListening = false;
-        let showTranscript = false;
+        let showTranscript = true; // Transcript open by default
         let clientWs = null;
         let audioWs = null;
         let mediaRecorder = null;
