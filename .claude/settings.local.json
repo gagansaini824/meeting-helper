@@ -34,7 +34,12 @@
       "Bash(test:*)",
       "Bash(pip3 uninstall:*)",
       "Bash(pip uninstall:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(pip3 show:*)",
+      "Bash(xargs:*)",
+      "Bash(find:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create:*)"
     ],
     "deny": [],
     "ask": []

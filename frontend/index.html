@@ -494,6 +494,122 @@
             background: var(--bg-tertiary);
         }
 
+        /* Mobile Bottom Navigation */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            z-index: 1001;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .mobile-nav-tabs {
+            display: flex;
+            height: 100%;
+        }
+
+        .mobile-nav-tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.6875rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .mobile-nav-tab:active {
+            background: var(--bg-tertiary);
+        }
+
+        .mobile-nav-tab.active {
+            color: var(--accent);
+        }
+
+        .mobile-nav-tab .icon-sm {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Mobile View States */
+        .mobile-view-sessions .sidebar {
+            transform: translateX(0) !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .mobile-view-sessions .overlay {
+            display: none !important;
+        }
+
+        .mobile-view-sessions .main-content {
+            display: none !important;
+        }
+
+        .mobile-view-assistant .sidebar {
+            transform: translateX(-100%) !important;
+        }
+
+        .mobile-view-assistant .overlay {
+            display: flex !important;
+        }
+
+        /* Sidebar Documents Section - hidden on desktop, shown on mobile */
+        .sidebar-docs-section {
+            display: none; /* Hidden by default on desktop */
+            border-top: 1px solid var(--border);
+            padding: 0.5rem;
+        }
+
+        .sidebar-docs-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            transition: background 0.2s;
+        }
+
+        .sidebar-docs-toggle:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .sidebar-docs-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .sidebar-docs-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-docs-list {
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .sidebar-docs-list.hidden {
+            display: none;
+        }
+
         /* Main content area */
         .main-content {
             flex: 1;
@@ -1347,22 +1463,35 @@
 
         /* Mobile devices (up to 768px) - sidebar collapses */
         @media screen and (max-width: 768px) {
+            /* Show bottom navigation on mobile */
+            .mobile-bottom-nav {
+                display: block;
+            }
+
+            /* Hide desktop sidebar toggle (using bottom nav instead) */
+            .sidebar-toggle {
+                display: none;
+            }
+
+            /* Sidebar takes full width on mobile when visible */
             .sidebar {
+                width: 100%;
+                max-width: 100%;
                 transform: translateX(-100%);
+                padding-bottom: 70px; /* Space for bottom nav */
             }
 
             .sidebar.open {
                 transform: translateX(0);
             }
 
-            .sidebar-toggle {
-                display: flex;
-            }
-
+            /* Main content adjustments */
             .main-content {
                 margin-left: 0;
                 padding: 1rem;
-                padding-top: 4rem;
+                padding-top: 1rem;
+                padding-bottom: 80px; /* Space for bottom nav */
+                display: none; /* Hide intro content on mobile, show assistant directly */
             }
 
             .container {
@@ -1385,22 +1514,43 @@
                 margin-bottom: 1rem;
             }
 
+            /* Overlay becomes full-screen fixed on mobile */
             .overlay {
-                position: relative;
-                bottom: auto;
-                right: auto;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 60px; /* Leave space for bottom nav */
                 width: 100%;
+                max-width: 100%;
                 max-height: none;
-                border-radius: 1rem;
-                margin-top: 1rem;
+                border-radius: 0;
+                margin: 0;
+                z-index: 100;
+            }
+
+            .overlay-content {
+                padding-bottom: 1rem;
+            }
+
+            /* Hide documents section in overlay on mobile - it's in sidebar */
+            .overlay .docs-section {
+                display: none;
+            }
+
+            /* Show documents section in sidebar on mobile */
+            .sidebar-docs-section {
+                display: block;
             }
 
             .user-guide-tab {
                 left: 1rem;
+                bottom: 70px; /* Above bottom nav */
             }
 
             .user-guide-panel {
                 left: 1rem;
+                bottom: 120px; /* Above bottom nav */
                 width: calc(100vw - 2rem);
             }
 
@@ -1415,7 +1565,7 @@
             .overlay.minimized {
                 position: fixed;
                 top: auto;
-                bottom: 1rem;
+                bottom: 70px; /* Above bottom nav */
                 left: auto;
                 right: 1rem;
                 width: auto;
@@ -1745,6 +1895,32 @@
             <div class="sidebar-section-label">Recent Sessions</div>
             <div id="sidebarSessionsList"></div>
         </div>
+        <!-- Documents Section in Sidebar (for mobile) -->
+        <div class="sidebar-docs-section" id="sidebarDocsSection">
+            <div class="sidebar-docs-toggle" id="sidebarDocsToggle">
+                <div class="sidebar-docs-left">
+                    <svg class="icon-sm" viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span>Documents (<span id="sidebarDocCount">0</span>)</span>
+                </div>
+                <div class="sidebar-docs-right">
+                    <label class="upload-btn-small" title="Upload document">
+                        <svg class="icon-sm" viewBox="0 0 24 24">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <input type="file" id="sidebarFileInput" accept=".txt,.md,.json,.csv,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp" multiple style="display: none;">
+                    </label>
+                    <svg class="icon-sm chevron" viewBox="0 0 24 24" id="sidebarDocsChevron">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="sidebar-docs-list hidden" id="sidebarDocsList"></div>
+        </div>
         <div class="sidebar-footer">
             <!-- View Mode Toggle -->
             <div class="view-mode-toggle">
@@ -1772,6 +1948,35 @@
             </div>
         </div>
     </aside>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <div class="mobile-nav-tabs">
+            <button class="mobile-nav-tab" id="mobileNavSessions" data-view="sessions">
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="9" y1="21" x2="9" y2="9"/>
+                </svg>
+                <span>Sessions</span>
+            </button>
+            <button class="mobile-nav-tab active" id="mobileNavAssistant" data-view="assistant">
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                </svg>
+                <span>Assistant</span>
+            </button>
+            <button class="mobile-nav-tab" id="mobileNavDocs" data-view="docs">
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span>Documents</span>
+            </button>
+        </div>
+    </nav>
 
     <!-- Authentication Container - Fixed position outside main-content -->
     <div class="auth-container" id="authContainer">
@@ -3222,9 +3427,9 @@
             await connectClient();
             updateCurrentSessionUI();
 
-            // Close sidebar on mobile after switching
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('open');
+            // On mobile, switch to assistant view after selecting a session
+            if (window.innerWidth <= 768 && typeof setMobileView === 'function') {
+                setMobileView('assistant');
             }
         }
 
@@ -3312,13 +3517,24 @@
         
         function renderDocuments() {
             docCount.textContent = documents.length;
-            
+
+            // Also update sidebar doc count
+            const sidebarDocCount = document.getElementById('sidebarDocCount');
+            if (sidebarDocCount) {
+                sidebarDocCount.textContent = documents.length;
+            }
+
             if (documents.length === 0) {
                 docsList.innerHTML = '<div class="empty-state">No documents uploaded</div>';
+                // Also update sidebar docs list
+                const sidebarDocsList = document.getElementById('sidebarDocsList');
+                if (sidebarDocsList) {
+                    sidebarDocsList.innerHTML = '<div class="empty-state" style="padding: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">No documents</div>';
+                }
                 return;
             }
-            
-            docsList.innerHTML = documents.map(d => `
+
+            const docsHtml = documents.map(d => `
                 <div class="doc-item">
                     <span class="doc-name">${escapeHtml(d.name)}</span>
                     <button class="doc-delete" onclick="deleteDocument('${d.id}')">
@@ -3329,6 +3545,14 @@
                     </button>
                 </div>
             `).join('');
+
+            docsList.innerHTML = docsHtml;
+
+            // Also update sidebar docs list
+            const sidebarDocsList = document.getElementById('sidebarDocsList');
+            if (sidebarDocsList) {
+                sidebarDocsList.innerHTML = docsHtml;
+            }
         }
         
         async function uploadDocument(file) {
@@ -3425,6 +3649,99 @@
                 }
             }
         });
+
+        // Mobile bottom navigation
+        const mobileNavSessions = document.getElementById('mobileNavSessions');
+        const mobileNavAssistant = document.getElementById('mobileNavAssistant');
+        const mobileNavDocs = document.getElementById('mobileNavDocs');
+        const mobileBottomNav = document.getElementById('mobileBottomNav');
+
+        function setMobileView(view) {
+            // Update nav tab active states
+            mobileNavSessions.classList.toggle('active', view === 'sessions');
+            mobileNavAssistant.classList.toggle('active', view === 'assistant');
+            mobileNavDocs.classList.toggle('active', view === 'docs');
+
+            // Update body classes for CSS view switching
+            document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant', 'mobile-view-docs');
+
+            if (view === 'sessions') {
+                sidebar.classList.add('open');
+                overlay.style.display = 'none';
+            } else if (view === 'assistant') {
+                sidebar.classList.remove('open');
+                overlay.style.display = 'flex';
+            } else if (view === 'docs') {
+                // Show sidebar with docs section expanded
+                sidebar.classList.add('open');
+                overlay.style.display = 'none';
+                // Expand the docs section in sidebar
+                const sidebarDocsList = document.getElementById('sidebarDocsList');
+                sidebarDocsList.classList.remove('hidden');
+                // Scroll to docs section
+                const sidebarDocsSection = document.getElementById('sidebarDocsSection');
+                sidebarDocsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        mobileNavSessions.onclick = () => setMobileView('sessions');
+        mobileNavAssistant.onclick = () => setMobileView('assistant');
+        mobileNavDocs.onclick = () => setMobileView('docs');
+
+        // Sidebar documents toggle
+        const sidebarDocsToggle = document.getElementById('sidebarDocsToggle');
+        const sidebarDocsList = document.getElementById('sidebarDocsList');
+        const sidebarDocsChevron = document.getElementById('sidebarDocsChevron');
+        const sidebarFileInput = document.getElementById('sidebarFileInput');
+
+        sidebarDocsToggle.onclick = (e) => {
+            // Don't toggle if clicking on upload button
+            if (e.target.closest('.upload-btn-small')) return;
+            sidebarDocsList.classList.toggle('hidden');
+            sidebarDocsChevron.style.transform = sidebarDocsList.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        };
+
+        // Sidebar file input handler
+        sidebarFileInput.onchange = async (e) => {
+            const files = e.target.files;
+            if (!files.length) return;
+
+            for (const file of files) {
+                await uploadDocument(file);
+            }
+            sidebarFileInput.value = '';
+        };
+
+        // Function to update sidebar documents list
+        function updateSidebarDocsList() {
+            const sidebarDocsList = document.getElementById('sidebarDocsList');
+            const sidebarDocCount = document.getElementById('sidebarDocCount');
+
+            if (sidebarDocCount) {
+                sidebarDocCount.textContent = documents.length;
+            }
+
+            if (sidebarDocsList) {
+                sidebarDocsList.innerHTML = documents.map(doc => `
+                    <div class="doc-item">
+                        <span class="doc-name">${doc.name}</span>
+                        <button class="doc-delete" onclick="removeDocument('${doc.id}')">
+                            <svg class="icon-xs" viewBox="0 0 24 24">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // When a session is selected on mobile, switch to assistant view
+        function onMobileSessionSelect() {
+            if (window.innerWidth <= 768) {
+                setMobileView('assistant');
+            }
+        }
 
         transcriptToggle.onclick = () => {
             showTranscript = !showTranscript;
