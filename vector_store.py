@@ -558,13 +558,20 @@ class PineconeVectorStore:
         if not self.is_configured():
             return []
 
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
             # Generate query embedding
+            embed_start = time.time()
             response = self._get_openai().embeddings.create(
                 model="text-embedding-3-small",
                 input=query
             )
             query_embedding = response.data[0].embedding
+            embed_time = time.time() - embed_start
+            logger.info(f"[TIMING] OpenAI embedding: {embed_time:.2f}s")
         except Exception as e:
             print(f"Query embedding error: {e}")
             return []
@@ -585,8 +592,12 @@ class PineconeVectorStore:
                 if pinecone_filter:
                     query_params["filter"] = pinecone_filter
 
+            pinecone_start = time.time()
             results = index.query(**query_params)
+            pinecone_time = time.time() - pinecone_start
+            logger.info(f"[TIMING] Pinecone query: {pinecone_time:.2f}s")
 
+            process_start = time.time()
             search_results = []
             for match in results.get("matches", []):
                 metadata = match.get("metadata", {})
@@ -598,6 +609,8 @@ class PineconeVectorStore:
                     score=match["score"],
                     metadata=metadata
                 ))
+            logger.info(f"[TIMING] Result processing: {time.time() - process_start:.2f}s")
+            logger.info(f"[TIMING] search() total: {embed_time + pinecone_time + (time.time() - process_start):.2f}s")
 
             return search_results
         except Exception as e:

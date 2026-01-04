@@ -395,12 +395,34 @@ async def global_periodic_session_autosave():
         await session_manager.auto_save_dirty_sessions()
 
 
+def warmup_pinecone_sync():
+    """Warm up Pinecone connection to avoid cold start latency on first query"""
+    try:
+        import time
+        start = time.time()
+        store = PineconeVectorStore()
+        if store.is_configured():
+            # Do a lightweight query to warm up the connection
+            index = store._get_index()
+            index.describe_index_stats()
+            logger.info(f"✓ Pinecone warmed up in {time.time() - start:.2f}s")
+        else:
+            logger.info("Pinecone not configured, skipping warmup")
+    except Exception as e:
+        logger.warning(f"Pinecone warmup failed (non-critical): {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database
     logger.info("Initializing database...")
     await db.init_db()
     logger.info("✓ Database initialized")
+
+    # Warm up Pinecone to avoid cold start on first query
+    logger.info("Warming up Pinecone...")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, warmup_pinecone_sync)
 
     # Start periodic tasks when app starts
     logger.info("Starting global periodic tasks...")
@@ -798,6 +820,10 @@ If no questions found, return {"questions": []}"""
 # Answer question with GPT (streaming with proper event handling)
 async def answer_question_stream(question: str, websocket: WebSocket, user_id: str, session_id: str):
     """Answer a question with GPT streaming. Requires user_id and session_id."""
+    import time
+    timings = {}
+    total_start = time.time()
+
     if not session_id:
         raise ValueError("session_id is required for answer_question_stream")
 
@@ -809,10 +835,20 @@ async def answer_question_stream(question: str, websocket: WebSocket, user_id: s
         raise ValueError(f"Session state not found for session_id={session_id}")
 
     try:
-        # Use user's vector store with more results for better context
+        # === STEP 1: Pinecone Search (Retrieval) ===
+        retrieval_start = time.time()
+
+        store_start = time.time()
         store = get_vector_store_for_user(user_id)
-        logger.info(f"Searching Pinecone for user '{user_id}' with query: {question[:50]}...")
+        logger.info(f"[TIMING] get_vector_store_for_user: {time.time() - store_start:.2f}s")
+
+        logger.info(f"[TIMING] Starting Pinecone search for: {question[:50]}...")
+        search_start = time.time()
         search_results = await store.search(user_id, question, top_k=8)
+        logger.info(f"[TIMING] store.search() returned: {time.time() - search_start:.2f}s")
+
+        timings['retrieval'] = time.time() - retrieval_start
+        logger.info(f"[TIMING] Pinecone retrieval (total): {timings['retrieval']:.2f}s")
 
         # Filter results by score threshold for better relevance
         relevant_results = [r for r in search_results if r.score > 0.3]
@@ -867,9 +903,11 @@ RESPONSE FORMAT:
             "data": {"question": question}
         })
 
-        # Stream the response with proper event handling
-        logger.info(f"Starting stream for question: {question}")
+        # === STEP 2: OpenAI API Call (Generation) ===
+        generation_start = time.time()
+        logger.info(f"[TIMING] Starting OpenAI stream...")
         chunk_count = 0
+        first_chunk_time = None
 
         # Create stream and iterate chunks (OpenAI streaming)
         stream = client.chat.completions.create(
@@ -884,6 +922,10 @@ RESPONSE FORMAT:
 
         finish_reason = None
         for chunk in stream:
+            if first_chunk_time is None and chunk.choices[0].delta.content:
+                first_chunk_time = time.time()
+                timings['time_to_first_chunk'] = first_chunk_time - generation_start
+                logger.info(f"[TIMING] Time to first chunk: {timings['time_to_first_chunk']:.2f}s")
             if chunk.choices[0].delta.content:
                 text = chunk.choices[0].delta.content
                 chunk_count += 1
@@ -908,7 +950,9 @@ RESPONSE FORMAT:
             if chunk.choices[0].finish_reason:
                 finish_reason = chunk.choices[0].finish_reason
 
-        logger.info(f"Stream complete. Total chunks: {chunk_count}")
+        # Calculate generation timing
+        timings['total_generation'] = time.time() - generation_start
+        logger.info(f"[TIMING] Total generation: {timings['total_generation']:.2f}s ({chunk_count} chunks)")
 
         # Send final message with complete answer
         await websocket.send_json({
@@ -937,6 +981,15 @@ RESPONSE FORMAT:
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log usage: {log_err}")
+
+        # === TIMING SUMMARY ===
+        timings['total'] = time.time() - total_start
+        logger.info(f"[TIMING] === ANSWER GENERATION SUMMARY ===")
+        logger.info(f"[TIMING]   Pinecone retrieval: {timings.get('retrieval', 0):.2f}s")
+        logger.info(f"[TIMING]   Time to first chunk: {timings.get('time_to_first_chunk', 0):.2f}s")
+        logger.info(f"[TIMING]   Total generation: {timings.get('total_generation', 0):.2f}s")
+        logger.info(f"[TIMING]   Total time: {timings['total']:.2f}s")
+        logger.info(f"[TIMING] ================================")
 
     except Exception as e:
         logger.error(f"Answer error: {e}")
