@@ -547,6 +547,7 @@
             transform: translateX(0) !important;
             width: 100% !important;
             max-width: 100% !important;
+            z-index: 100;
         }
 
         .mobile-view-sessions .overlay {
@@ -563,6 +564,29 @@
 
         .mobile-view-assistant .overlay {
             display: flex !important;
+        }
+
+        .mobile-view-assistant .main-content {
+            display: none !important;
+        }
+
+        .mobile-view-docs .sidebar {
+            transform: translateX(0) !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            z-index: 100;
+        }
+
+        .mobile-view-docs .overlay {
+            display: none !important;
+        }
+
+        .mobile-view-docs .main-content {
+            display: none !important;
+        }
+
+        .mobile-view-docs .sidebar-docs-section {
+            display: block !important;
         }
 
         /* Sidebar Documents Section - hidden on desktop, shown on mobile */
@@ -3657,6 +3681,9 @@
         const mobileBottomNav = document.getElementById('mobileBottomNav');
 
         function setMobileView(view) {
+            // Only apply on mobile
+            if (window.innerWidth > 768) return;
+
             // Update nav tab active states
             mobileNavSessions.classList.toggle('active', view === 'sessions');
             mobileNavAssistant.classList.toggle('active', view === 'assistant');
@@ -3664,6 +3691,7 @@
 
             // Update body classes for CSS view switching
             document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant', 'mobile-view-docs');
+            document.body.classList.add(`mobile-view-${view}`);
 
             if (view === 'sessions') {
                 sidebar.classList.add('open');
@@ -3940,6 +3968,28 @@
 
         // Initialize view mode
         setViewMode(currentViewMode);
+
+        // Initialize mobile view on load (default to assistant view)
+        if (window.innerWidth <= 768) {
+            setMobileView('assistant');
+        }
+
+        // Handle resize - reset mobile view when switching between mobile/desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth <= 768) {
+                // Entering mobile mode
+                if (!document.body.classList.contains('mobile-view-sessions') &&
+                    !document.body.classList.contains('mobile-view-assistant') &&
+                    !document.body.classList.contains('mobile-view-docs')) {
+                    setMobileView('assistant');
+                }
+            } else {
+                // Entering desktop mode - remove mobile classes
+                document.body.classList.remove('mobile-view-sessions', 'mobile-view-assistant', 'mobile-view-docs');
+                overlay.style.display = '';
+                sidebar.classList.remove('open');
+            }
+        });
 
         // Track if app has been initialized to prevent duplicate calls
         let appInitialized = false;
