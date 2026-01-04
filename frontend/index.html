@@ -3623,8 +3623,19 @@
         // Initialize view mode
         setViewMode(currentViewMode);
 
+        // Track if app has been initialized to prevent duplicate calls
+        let appInitialized = false;
+        let appInitializing = false;
+
         // Initialize app after authentication
         async function initApp() {
+            // Prevent duplicate initialization
+            if (appInitialized || appInitializing) {
+                console.log('[initApp] Already initialized or initializing, skipping');
+                return;
+            }
+            appInitializing = true;
+
             console.log('[initApp] Starting, authToken:', authToken ? 'present' : 'missing');
             loadDocuments();
             startIdleCheck();
@@ -3677,6 +3688,10 @@
             } else {
                 console.warn('[initApp] No session available, skipping WebSocket connection');
             }
+
+            appInitialized = true;
+            appInitializing = false;
+            console.log('[initApp] Initialization complete');
         }
 
         // Start authentication flow on page load

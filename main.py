@@ -468,6 +468,9 @@ async def get_current_user_info(request: Request):
     return {"authenticated": False, "user": None, "devMode": False}
 
 
+# Cache for users we've already persisted to database (avoids DB call on every request)
+_persisted_users: set = set()
+
 async def get_user_id_from_request(request: Request) -> str:
     """Get user ID from request, returns 'dev_user' if auth not configured, raises error if auth fails"""
     if not clerk_auth.is_configured():
@@ -475,14 +478,16 @@ async def get_user_id_from_request(request: Request) -> str:
 
     user = await optional_auth(request)
     if user:
-        # Persist user to database
-        await get_or_create_user(
-            user_id=user.user_id,
-            email=user.email,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            image_url=user.image_url
-        )
+        # Only persist to database if we haven't seen this user yet in this session
+        if user.user_id not in _persisted_users:
+            await get_or_create_user(
+                user_id=user.user_id,
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                image_url=user.image_url
+            )
+            _persisted_users.add(user.user_id)
         return user.user_id
     # No fallback to anonymous - raise error
     raise HTTPException(status_code=401, detail="Authentication required")
@@ -495,14 +500,16 @@ async def get_user_id_from_websocket(websocket: WebSocket, token: str = None) ->
 
     user = await clerk_auth.verify_websocket(websocket, token)
     if user:
-        # Persist user to database
-        await get_or_create_user(
-            user_id=user.user_id,
-            email=user.email,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            image_url=user.image_url
-        )
+        # Only persist to database if we haven't seen this user yet
+        if user.user_id not in _persisted_users:
+            await get_or_create_user(
+                user_id=user.user_id,
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                image_url=user.image_url
+            )
+            _persisted_users.add(user.user_id)
         return user.user_id
     # No fallback to anonymous - raise error
     raise HTTPException(status_code=401, detail="WebSocket authentication required")
@@ -1253,8 +1260,10 @@ async def audio_websocket(websocket: WebSocket, token: str = Query(None), sessio
 @app.get("/api/documents")
 async def list_documents(request: Request):
     user_id = await get_user_id_from_request(request)
-    store = get_vector_store_for_user(user_id)
-    return {"documents": await store.list_documents(user_id), "userId": user_id}
+    # Use PostgreSQL for fast document listing instead of Pinecone
+    from database import get_user_documents
+    documents = await get_user_documents(user_id)
+    return {"documents": documents, "userId": user_id}
 
 @app.post("/api/documents")
 async def upload_document(
