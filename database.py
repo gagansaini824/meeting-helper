@@ -244,7 +244,8 @@ class DatabaseManager:
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS full_transcript TEXT DEFAULT ''",
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()",
-            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP"
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS conversation_summaries JSON DEFAULT '[]'::json"
         ]
 
         async with self._engine.begin() as conn:
