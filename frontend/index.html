@@ -3246,16 +3246,29 @@
         }
         
         async function uploadDocument(file) {
+            if (!currentSessionId) {
+                console.error('Cannot upload document: no active session');
+                alert('Please start a session first before uploading documents.');
+                return;
+            }
+
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);
+            formData.append('session_id', currentSessionId);
 
             try {
-                await fetch('/api/documents', {
+                const response = await fetch('/api/documents', {
                     method: 'POST',
                     body: formData,
                     headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
                 });
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('Upload failed:', error);
+                    alert('Upload failed: ' + (error.detail || 'Unknown error'));
+                    return;
+                }
                 await loadDocuments();
             } catch (error) {
                 console.error('Upload failed:', error);
