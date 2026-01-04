@@ -427,6 +427,12 @@ def warmup_services_sync():
         logger.warning(f"Pinecone warmup failed (non-critical): {e}")
 
 
+async def background_warmup():
+    """Run warmup in background so server can accept connections immediately"""
+    await asyncio.sleep(0.1)  # Let the server start first
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, warmup_services_sync)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database
@@ -434,22 +440,23 @@ async def lifespan(app: FastAPI):
     await db.init_db()
     logger.info("✓ Database initialized")
 
-    # Warm up external services to avoid cold start on first query
-    logger.info("Warming up external services...")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, warmup_services_sync)
-
     # Start periodic tasks when app starts
     logger.info("Starting global periodic tasks...")
     question_task = asyncio.create_task(global_periodic_question_detection())
     autosave_task = asyncio.create_task(global_periodic_session_autosave())
     logger.info("✓ Global periodic tasks running")
+
+    # Warm up external services in background (non-blocking)
+    logger.info("Starting background warmup of external services...")
+    warmup_task = asyncio.create_task(background_warmup())
+
     yield
     # Save all sessions before shutdown
     await session_manager.auto_save_dirty_sessions()
     # Cancel tasks on shutdown
     question_task.cancel()
     autosave_task.cancel()
+    warmup_task.cancel()
     # Close database
     await db.close()
 
@@ -462,6 +469,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Health check endpoint for Railway
+@app.get("/health")
+async def health_check():
+    """Health check endpoint - returns 200 when server is ready"""
+    return {"status": "healthy"}
 
 # Authentication endpoints
 @app.get("/api/auth/config")
