@@ -395,17 +395,30 @@ async def global_periodic_session_autosave():
         await session_manager.auto_save_dirty_sessions()
 
 
-def warmup_pinecone_sync():
-    """Warm up Pinecone connection to avoid cold start latency on first query"""
+def warmup_services_sync():
+    """Warm up external service connections to avoid cold start latency on first query"""
+    import time
+
+    # Warm up OpenAI embedding endpoint
     try:
-        import time
-        start = time.time()
+        openai_start = time.time()
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client.embeddings.create(
+            model="text-embedding-3-small",
+            input="warmup"
+        )
+        logger.info(f"✓ OpenAI embeddings warmed up in {time.time() - openai_start:.2f}s")
+    except Exception as e:
+        logger.warning(f"OpenAI warmup failed (non-critical): {e}")
+
+    # Warm up Pinecone connection
+    try:
+        pinecone_start = time.time()
         store = PineconeVectorStore()
         if store.is_configured():
-            # Do a lightweight query to warm up the connection
             index = store._get_index()
             index.describe_index_stats()
-            logger.info(f"✓ Pinecone warmed up in {time.time() - start:.2f}s")
+            logger.info(f"✓ Pinecone warmed up in {time.time() - pinecone_start:.2f}s")
         else:
             logger.info("Pinecone not configured, skipping warmup")
     except Exception as e:
@@ -419,10 +432,10 @@ async def lifespan(app: FastAPI):
     await db.init_db()
     logger.info("✓ Database initialized")
 
-    # Warm up Pinecone to avoid cold start on first query
-    logger.info("Warming up Pinecone...")
+    # Warm up external services to avoid cold start on first query
+    logger.info("Warming up external services...")
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, warmup_pinecone_sync)
+    await loop.run_in_executor(None, warmup_services_sync)
 
     # Start periodic tasks when app starts
     logger.info("Starting global periodic tasks...")
