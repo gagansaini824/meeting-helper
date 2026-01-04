@@ -161,8 +161,10 @@ class SessionState:
         self.detected_questions: list[dict] = []
         self.answers: list[dict] = []
         self.suggestions: list[dict] = []
+        self.conversation_summaries: list[dict] = []  # [{timestamp: str, summary: str, transcript_length: int}]
         self.last_analysis_time: float = 0
         self.last_processed_transcript_length: int = 0
+        self.last_summary_transcript_length: int = 0  # Track transcript length at last summary
         self.last_save_time: float = 0
         self.dirty: bool = False  # Track if state needs saving
 
@@ -204,6 +206,32 @@ class SessionState:
     def get_recent_transcript(self, chars: int = 3000) -> str:
         return self.full_transcript[-chars:] if len(self.full_transcript) > chars else self.full_transcript
 
+    def add_summary(self, summary: str):
+        """Add a conversation summary"""
+        summary_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "summary": summary,
+            "transcript_length": len(self.full_transcript)
+        }
+        self.conversation_summaries.append(summary_entry)
+        self.last_summary_transcript_length = len(self.full_transcript)
+        self.dirty = True
+        logger.info(f"Added conversation summary #{len(self.conversation_summaries)} for session {self.session_id}")
+
+    def get_summaries_text(self) -> str:
+        """Get all summaries as formatted text for context"""
+        if not self.conversation_summaries:
+            return ""
+        summaries_text = "CONVERSATION SUMMARIES (chronological order):\n"
+        for i, s in enumerate(self.conversation_summaries, 1):
+            summaries_text += f"\n[Summary {i} - {s['timestamp'][:16]}]:\n{s['summary']}\n"
+        return summaries_text
+
+    def needs_summary(self, min_new_chars: int = 2000) -> bool:
+        """Check if enough new content exists to warrant a new summary"""
+        new_content_length = len(self.full_transcript) - self.last_summary_transcript_length
+        return new_content_length >= min_new_chars
+
     def get_new_transcript_for_detection(self, max_chars: int = 2500, context_overlap: int = 500) -> tuple[str, bool]:
         """
         Get transcript content for question detection with sliding window overlap.
@@ -240,7 +268,9 @@ class SessionState:
         self.detected_questions = []
         self.answers = []
         self.suggestions = []
+        self.conversation_summaries = []
         self.last_processed_transcript_length = 0
+        self.last_summary_transcript_length = 0
         self.dirty = True
 
     def to_dict(self) -> dict:
@@ -249,7 +279,8 @@ class SessionState:
             "transcript_entries": self.transcript,
             "full_transcript": self.full_transcript,
             "detected_questions": self.detected_questions,
-            "answers": self.answers
+            "answers": self.answers,
+            "conversation_summaries": self.conversation_summaries
         }
 
     @classmethod
@@ -260,8 +291,12 @@ class SessionState:
         state.full_transcript = data.get("full_transcript") or ""
         state.detected_questions = data.get("detected_questions") or []
         state.answers = data.get("answers") or []
+        state.conversation_summaries = data.get("conversation_summaries") or []
         # Calculate processed length from existing transcript
         state.last_processed_transcript_length = len(state.full_transcript)
+        # Set summary length from last summary if exists
+        if state.conversation_summaries:
+            state.last_summary_transcript_length = state.conversation_summaries[-1].get("transcript_length", 0)
         return state
 
 
@@ -397,6 +432,94 @@ async def global_periodic_session_autosave():
         await session_manager.auto_save_dirty_sessions()
 
 
+async def summarize_conversation(transcript_text: str) -> str:
+    """Generate a summary of the conversation using OpenAI"""
+    try:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            max_tokens=500,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a conversation summarizer. Create a concise summary of the conversation in bullet points.
+
+INSTRUCTIONS:
+- Extract key topics discussed
+- Note any important questions asked and answers given
+- Highlight any decisions made or action items mentioned
+- Keep each bullet point brief (1-2 sentences max)
+- Use 3-6 bullet points depending on content length
+- Focus on factual information, not filler words
+
+FORMAT:
+• [Key point 1]
+• [Key point 2]
+• [Key point 3]
+..."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Summarize this conversation:\n\n{transcript_text}"
+                }
+            ]
+        )
+
+        summary = response.choices[0].message.content.strip()
+        return summary
+    except Exception as e:
+        logger.error(f"Failed to generate conversation summary: {e}")
+        return ""
+
+
+async def global_periodic_conversation_summarization():
+    """Summarize conversations every 5 minutes for active sessions with new content"""
+    logger.info("✓ Conversation summarization started (every 5 minutes)")
+    while True:
+        await asyncio.sleep(300)  # 5 minutes
+
+        for session_id, state in list(session_manager._sessions.items()):
+            # Skip temporary sessions
+            if session_id.startswith("temp_"):
+                continue
+
+            # Check if there's enough new content to summarize (at least 2000 chars)
+            if not state.needs_summary(min_new_chars=2000):
+                continue
+
+            try:
+                # Get transcript content since last summary
+                start_pos = state.last_summary_transcript_length
+                new_transcript = state.full_transcript[start_pos:]
+
+                if len(new_transcript.strip()) < 500:  # Skip if too short
+                    continue
+
+                logger.info(f"Generating summary for session {session_id} ({len(new_transcript)} new chars)")
+
+                # Generate summary
+                summary = await summarize_conversation(new_transcript)
+
+                if summary:
+                    state.add_summary(summary)
+                    # Save session after adding summary
+                    await session_manager.save_session(session_id)
+
+                    # Broadcast summary to clients
+                    await broadcast({
+                        "type": "conversation_summary",
+                        "data": {
+                            "summary": summary,
+                            "timestamp": datetime.now().isoformat(),
+                            "summary_count": len(state.conversation_summaries)
+                        }
+                    }, session_id)
+
+            except Exception as e:
+                logger.error(f"Error summarizing session {session_id}: {e}")
+
+
 def warmup_services_sync():
     """Warm up external service connections to avoid cold start latency on first query"""
     import time
@@ -444,6 +567,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting global periodic tasks...")
     question_task = asyncio.create_task(global_periodic_question_detection())
     autosave_task = asyncio.create_task(global_periodic_session_autosave())
+    summarization_task = asyncio.create_task(global_periodic_conversation_summarization())
     logger.info("✓ Global periodic tasks running")
 
     # Warm up external services in background (non-blocking)
@@ -456,6 +580,7 @@ async def lifespan(app: FastAPI):
     # Cancel tasks on shutdown
     question_task.cancel()
     autosave_task.cancel()
+    summarization_task.cancel()
     warmup_task.cancel()
     # Close database
     await db.close()
@@ -925,6 +1050,17 @@ RESPONSE FORMAT:
         # Get transcript from session (session_state is guaranteed to exist now)
         transcript = session_state.get_recent_transcript(2000)
 
+        # Get conversation summaries for broader context
+        summaries_text = session_state.get_summaries_text()
+        summaries_count = len(session_state.conversation_summaries)
+        logger.info(f"Including {summaries_count} conversation summaries in context")
+
+        # Build conversation context with summaries + recent transcript
+        conversation_context = ""
+        if summaries_text:
+            conversation_context += f"{summaries_text}\n\n"
+        conversation_context += f"RECENT CONVERSATION:\n{transcript}"
+
         # Send start event
         await websocket.send_json({
             "type": "answer_start",
@@ -944,7 +1080,7 @@ RESPONSE FORMAT:
             stream=True,
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"Conversation context:\n{transcript}\n\nQuestion to answer: {question}\n\nProvide a detailed, expert-level response using any relevant document context."}
+                {"role": "user", "content": f"Conversation context:\n{conversation_context}\n\nQuestion to answer: {question}\n\nProvide a detailed, expert-level response using any relevant document context. Use the conversation summaries to understand the broader context of the discussion."}
             ]
         )
 
