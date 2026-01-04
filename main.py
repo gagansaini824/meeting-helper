@@ -162,6 +162,7 @@ class SessionState:
         self.answers: list[dict] = []
         self.suggestions: list[dict] = []
         self.conversation_summaries: list[dict] = []  # [{timestamp: str, summary: str, transcript_length: int}]
+        self.system_prompt: str = ""  # Custom system prompt for this session
         self.last_analysis_time: float = 0
         self.last_processed_transcript_length: int = 0
         self.last_summary_transcript_length: int = 0  # Track transcript length at last summary
@@ -292,6 +293,7 @@ class SessionState:
         state.detected_questions = data.get("detected_questions") or []
         state.answers = data.get("answers") or []
         state.conversation_summaries = data.get("conversation_summaries") or []
+        state.system_prompt = data.get("system_prompt") or ""
         # Calculate processed length from existing transcript
         state.last_processed_transcript_length = len(state.full_transcript)
         # Set summary length from last summary if exists
@@ -339,7 +341,8 @@ class SessionManager:
                 "full_transcript": session_data.full_transcript,
                 "detected_questions": session_data.detected_questions,
                 "answers": session_data.answers,
-                "conversation_summaries": getattr(session_data, 'conversation_summaries', None) or []
+                "conversation_summaries": getattr(session_data, 'conversation_summaries', None) or [],
+                "system_prompt": getattr(session_data, 'system_prompt', None) or ""
             }
         )
         self._sessions[session_id] = state
@@ -1020,7 +1023,8 @@ async def answer_question_stream(question: str, websocket: WebSocket, user_id: s
         doc_section = f"""PROJECT DOCUMENTS (Use these to answer questions about the user's projects):
 {doc_context}""" if doc_context else "No project documents uploaded yet."
 
-        system = f"""You are an expert interview coach helping an Indian IT professional answer technical interview questions in real-time. Your responses should sound natural and conversational, like how an experienced Indian software engineer would explain things.
+        # Base system prompt
+        base_system = f"""You are an expert interview coach helping an Indian IT professional answer technical interview questions in real-time. Your responses should sound natural and conversational, like how an experienced Indian software engineer would explain things.
 
 SPEAKING STYLE:
 - Use natural, conversational English as spoken by Indian IT professionals
@@ -1048,6 +1052,17 @@ RESPONSE FORMAT:
 - Use bullet points for listing multiple features or components
 
 {doc_section}"""
+
+        # Append session-specific system prompt if available
+        session_custom_prompt = session_state.system_prompt.strip() if session_state.system_prompt else ""
+        if session_custom_prompt:
+            system = f"""{base_system}
+
+USER'S CUSTOM INSTRUCTIONS FOR THIS SESSION:
+{session_custom_prompt}"""
+            logger.info(f"Using custom system prompt for session {session_id}: {session_custom_prompt[:100]}...")
+        else:
+            system = base_system
 
         # Get transcript from session (session_state is guaranteed to exist now)
         transcript = session_state.get_recent_transcript(2000)
@@ -1212,6 +1227,7 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
         "questions": session_state.detected_questions,
         "suggestions": session_state.suggestions,
         "summaries": session_state.conversation_summaries,
+        "system_prompt": session_state.system_prompt,
         "userId": user_id,
         "sessionId": current_session_id
     }
@@ -1267,6 +1283,7 @@ async def client_websocket(websocket: WebSocket, token: str = Query(None), sessi
                                 "questions": session_state.detected_questions,
                                 "suggestions": session_state.suggestions,
                                 "summaries": session_state.conversation_summaries,
+                                "system_prompt": session_state.system_prompt,
                                 "sessionId": new_session_id
                             }
                         })
@@ -1627,6 +1644,7 @@ async def get_session_details(session_id: str, request: Request):
         "answers": session.answers or [],
         "document_ids": session.document_ids or [],
         "full_transcript": session.full_transcript or "",
+        "system_prompt": getattr(session, 'system_prompt', None) or "",
         "created_at": session.created_at.isoformat() if session.created_at else None,
         "updated_at": session.updated_at.isoformat() if session.updated_at else None
     }
@@ -1634,7 +1652,7 @@ async def get_session_details(session_id: str, request: Request):
 
 @app.put("/api/sessions/{session_id}")
 async def update_session_endpoint(session_id: str, request: Request):
-    """Update session data (title, status, etc.)"""
+    """Update session data (title, status, system_prompt, etc.)"""
     user_id = await get_user_id_from_request(request)
     body = await request.json()
 
@@ -1647,11 +1665,18 @@ async def update_session_endpoint(session_id: str, request: Request):
         detected_questions=body.get("detected_questions"),
         answers=body.get("answers"),
         document_ids=body.get("document_ids"),
-        full_transcript=body.get("full_transcript")
+        full_transcript=body.get("full_transcript"),
+        system_prompt=body.get("system_prompt")
     )
 
     if not session:
         raise HTTPException(404, "Session not found")
+
+    # Also update in-memory session state if loaded
+    session_state = session_manager.get_session_state(session_id)
+    if session_state and "system_prompt" in body:
+        session_state.system_prompt = body.get("system_prompt") or ""
+        logger.info(f"Updated system_prompt for session {session_id} in memory")
 
     return {"success": True, "updated_at": session.updated_at.isoformat()}
 

@@ -129,6 +129,9 @@ class MeetingSession(Base):
     document_ids = Column(JSON, default=list)  # [doc_id, ...] - documents used in this session
     conversation_summaries = Column(JSON, default=list)  # [{timestamp: str, summary: str, transcript_length: int}]
 
+    # Custom system prompt for this session (appended to default prompt)
+    system_prompt = Column(Text, default="")
+
     # Full transcript text for easy search
     full_transcript = Column(Text, default="")
 
@@ -245,7 +248,8 @@ class DatabaseManager:
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()",
             "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP",
-            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS conversation_summaries JSON DEFAULT '[]'::json"
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS conversation_summaries JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS system_prompt TEXT DEFAULT ''"
         ]
 
         async with self._engine.begin() as conn:
@@ -694,6 +698,7 @@ async def get_user_sessions(user_id: str, include_archived: bool = False) -> Lis
                 "id": s.id,
                 "title": s.title,
                 "status": s.status,
+                "system_prompt": getattr(s, 'system_prompt', None) or "",
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None,
                 "question_count": len(s.detected_questions) if s.detected_questions else 0,
@@ -714,6 +719,7 @@ async def update_session(
     document_ids: Optional[list] = None,
     full_transcript: Optional[str] = None,
     conversation_summaries: Optional[list] = None,
+    system_prompt: Optional[str] = None,
     ended_at: Optional[datetime] = None
 ) -> Optional[MeetingSession]:
     """Update a session's data"""
@@ -747,6 +753,8 @@ async def update_session(
             meeting_session.full_transcript = full_transcript
         if conversation_summaries is not None:
             meeting_session.conversation_summaries = conversation_summaries
+        if system_prompt is not None:
+            meeting_session.system_prompt = system_prompt
         if ended_at is not None:
             meeting_session.ended_at = ended_at
 
