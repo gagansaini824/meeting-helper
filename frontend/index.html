@@ -2323,40 +2323,81 @@
 
         // Connect to client WebSocket with authentication
         let isIntentionalClose = false;
+        let isConnecting = false;
+        let connectionPromise = null;
+
         async function connectClient() {
             // Must have a session_id to connect
             if (!currentSessionId) {
-                console.log('No session_id, skipping client WebSocket connection');
+                console.log('[connectClient] No session_id, skipping');
                 return;
             }
 
-            // Close existing connection if any
-            if (clientWs && clientWs.readyState !== WebSocket.CLOSED) {
-                isIntentionalClose = true;
-                clientWs.close();
-                await new Promise(resolve => setTimeout(resolve, 100));
+            // Prevent concurrent connection attempts
+            if (isConnecting) {
+                console.log('[connectClient] Already connecting, waiting...');
+                return connectionPromise;
             }
 
-            const token = await getAuthToken();
-            let wsUrl = token
-                ? `${WS_BASE}/ws/client?token=${encodeURIComponent(token)}&session_id=${encodeURIComponent(currentSessionId)}`
-                : `${WS_BASE}/ws/client?session_id=${encodeURIComponent(currentSessionId)}`;
+            // If already connected to the same session, skip
+            if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                console.log('[connectClient] Already connected');
+                return;
+            }
 
-            console.log('Connecting client WebSocket with session:', currentSessionId);
+            isConnecting = true;
+            connectionPromise = new Promise(async (resolve) => {
+                try {
+                    // Close existing connection if any
+                    if (clientWs && clientWs.readyState !== WebSocket.CLOSED) {
+                        isIntentionalClose = true;
+                        clientWs.close();
+                        await new Promise(r => setTimeout(r, 100));
+                    }
 
-            isIntentionalClose = false;
-            clientWs = new WebSocket(wsUrl);
+                    const token = await getAuthToken();
+                    let wsUrl = token
+                        ? `${WS_BASE}/ws/client?token=${encodeURIComponent(token)}&session_id=${encodeURIComponent(currentSessionId)}`
+                        : `${WS_BASE}/ws/client?session_id=${encodeURIComponent(currentSessionId)}`;
 
-            clientWs.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                handleMessage(msg);
-            };
+                    console.log('[connectClient] Connecting to:', currentSessionId);
 
-            clientWs.onclose = () => {
-                if (!isIntentionalClose && currentSessionId) {
-                    setTimeout(connectClient, 2000);
+                    isIntentionalClose = false;
+                    clientWs = new WebSocket(wsUrl);
+
+                    clientWs.onopen = () => {
+                        console.log('[connectClient] WebSocket connected');
+                        isConnecting = false;
+                        resolve();
+                    };
+
+                    clientWs.onmessage = (event) => {
+                        const msg = JSON.parse(event.data);
+                        handleMessage(msg);
+                    };
+
+                    clientWs.onerror = (error) => {
+                        console.error('[connectClient] WebSocket error:', error);
+                        isConnecting = false;
+                        resolve();
+                    };
+
+                    clientWs.onclose = (event) => {
+                        console.log('[connectClient] WebSocket closed:', event.code, event.reason);
+                        isConnecting = false;
+                        if (!isIntentionalClose && currentSessionId) {
+                            console.log('[connectClient] Will reconnect in 2s...');
+                            setTimeout(connectClient, 2000);
+                        }
+                    };
+                } catch (error) {
+                    console.error('[connectClient] Error:', error);
+                    isConnecting = false;
+                    resolve();
                 }
-            };
+            });
+
+            return connectionPromise;
         }
         
         let currentAnswer = "";
@@ -2651,16 +2692,53 @@
             }
         }
         
-        // Transcript rendering
-        function renderTranscript(entries) {
-            transcriptBox.innerHTML = '';
-            entries.forEach(entry => {
-                appendTranscript({ speaker: entry.speaker, text: entry.text, is_final: true });
-            });
-        }
-        
         // Track the last final transcript to avoid duplicates
         let lastFinalTranscript = "";
+
+        // Transcript rendering - renders full history from server
+        function renderTranscript(entries) {
+            transcriptBox.innerHTML = '';
+            lastFinalTranscript = "";  // Reset duplicate tracking when rendering full transcript
+
+            if (!entries || entries.length === 0) {
+                return;
+            }
+
+            entries.forEach(entry => {
+                const div = document.createElement('div');
+                div.className = 'transcript-entry';
+
+                const entryId = `${Date.now()}-${Math.random()}`;
+                div.dataset.text = entry.text;
+                div.dataset.entryId = entryId;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'transcript-checkbox';
+                checkbox.dataset.entryId = entryId;
+                checkbox.onchange = (e) => {
+                    e.stopPropagation();
+                    toggleTranscriptSelection(div, checkbox);
+                };
+                checkbox.onclick = (e) => e.stopPropagation();
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'transcript-text';
+                textSpan.innerHTML = entry.text;
+
+                div.appendChild(checkbox);
+                div.appendChild(textSpan);
+
+                transcriptBox.appendChild(div);
+            });
+
+            // Update lastFinalTranscript to the last entry
+            if (entries.length > 0) {
+                lastFinalTranscript = entries[entries.length - 1].text.trim();
+            }
+
+            transcriptBox.scrollTop = transcriptBox.scrollHeight;
+        }
 
         function appendTranscript(data) {
             // Remove ALL interim entries
@@ -2907,21 +2985,28 @@
         }
         
         // Answer
-        function askQuestion(question) {
-            console.log('askQuestion called with:', question);
-            console.log('WebSocket state:', clientWs?.readyState, 'OPEN is', WebSocket.OPEN);
+        async function askQuestion(question) {
+            console.log('[askQuestion] Called with:', question);
 
             currentAnswer = "";  // Reset answer for streaming
             answerPanel.classList.remove('hidden');
             answerQuestion.textContent = 'Q: ' + question;
             answerText.innerHTML = '<div class="loading"><div class="spinner"></div>Searching and analyzing...</div>';
 
+            // Ensure WebSocket is connected
+            if (!clientWs || clientWs.readyState !== WebSocket.OPEN) {
+                console.log('[askQuestion] WebSocket not open, connecting...');
+                await connectClient();
+                // Wait a bit for connection to stabilize
+                await new Promise(r => setTimeout(r, 300));
+            }
+
             if (clientWs && clientWs.readyState === WebSocket.OPEN) {
-                console.log('Sending get_answer request...');
+                console.log('[askQuestion] Sending get_answer request...');
                 clientWs.send(JSON.stringify({ type: 'get_answer', question }));
             } else {
-                console.error('WebSocket not connected!');
-                answerText.innerHTML = '<div style="color: var(--danger);">WebSocket not connected. Please refresh the page.</div>';
+                console.error('[askQuestion] WebSocket still not connected!');
+                answerText.innerHTML = '<div style="color: var(--danger);">Unable to connect. Please refresh the page and try again.</div>';
             }
         }
         
