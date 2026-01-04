@@ -12,7 +12,27 @@
     <!-- Clerk JS SDK will be loaded dynamically after getting publishable key -->
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        
+
+        /* Global scrollbar styling for better visibility */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--text-secondary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+
         :root {
             --bg-primary: #0a0a0b;
             --bg-secondary: #141416;
@@ -25,22 +45,470 @@
             --success: #22c55e;
             --warning: #f59e0b;
             --danger: #ef4444;
+            --sidebar-width: 260px;
         }
-        
+
+        /* View mode toggle */
+        .view-mode-toggle {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.25rem;
+            background: var(--bg-tertiary);
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .view-mode-btn {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.375rem;
+        }
+
+        .view-mode-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .view-mode-btn.active {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        /* Hide container when session is active (in any mode) */
+        body.session-active .container {
+            display: none;
+        }
+
+        /* Full chat mode styles */
+        body.chat-mode .container {
+            display: none;
+        }
+
+        body.chat-mode .overlay {
+            position: relative;
+            bottom: auto;
+            right: auto;
+            width: 100%;
+            max-width: 100%;
+            height: calc(100vh - 2rem);
+            max-height: calc(100vh - 2rem);
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+            background: var(--bg-primary);
+        }
+
+        body.chat-mode .main-content {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        body.chat-mode .overlay .resize-handle-horizontal {
+            display: none;
+        }
+
+        body.chat-mode .overlay-content {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        body.chat-mode #questionsList {
+            max-height: none;
+        }
+
+        body.chat-mode .transcript-box {
+            max-height: 300px;
+        }
+
+        body.chat-mode .answer-panel {
+            max-width: 800px;
+            margin: 0 auto 1rem;
+        }
+
+        /* User guide tab */
+        .user-guide-tab {
+            position: fixed;
+            bottom: 1rem;
+            left: calc(var(--sidebar-width) + 1rem);
+            z-index: 50;
+        }
+
+        .user-guide-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .user-guide-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .user-guide-panel {
+            position: fixed;
+            bottom: 4rem;
+            left: calc(var(--sidebar-width) + 1rem);
+            width: 400px;
+            max-width: calc(100vw - var(--sidebar-width) - 2rem);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            z-index: 51;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transform: translateY(20px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .user-guide-panel.open {
+            transform: translateY(0);
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .user-guide-panel h2 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-guide-close {
+            margin-left: auto;
+            padding: 0.25rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 0.25rem;
+        }
+
+        .user-guide-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        body.chat-mode .user-guide-tab {
+            left: calc(var(--sidebar-width) + 1rem);
+        }
+
+        body.chat-mode .user-guide-panel {
+            left: calc(var(--sidebar-width) + 1rem);
+        }
+
         body {
             font-family: 'Space Grotesk', sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
+            padding: 0;
+            display: flex;
+        }
+
+        /* Resize handle styles */
+        .resize-handle {
+            position: absolute;
+            background: transparent;
+            z-index: 10;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover,
+        .resize-handle.active {
+            background: var(--accent);
+        }
+
+        .resize-handle-horizontal {
+            width: 4px;
+            height: 100%;
+            top: 0;
+            right: -2px;
+            cursor: ew-resize;
+        }
+
+        .resize-handle-vertical {
+            height: 4px;
+            width: 100%;
+            bottom: -2px;
+            left: 0;
+            cursor: ns-resize;
+        }
+
+        /* Left Sidebar - ChatGPT/Claude style */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: 200px;
+            max-width: 400px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar .resize-handle-horizontal {
+            right: 0;
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .new-session-btn-large {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .new-session-btn-large:hover {
+            background: var(--bg-primary);
+            border-color: var(--accent);
+        }
+
+        .sidebar-sessions {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .sidebar-sessions::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar-sessions::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        .sidebar-sessions::-webkit-scrollbar-thumb {
+            background: var(--text-secondary);
+            border-radius: 4px;
+        }
+
+        .sidebar-sessions::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+
+        .sidebar-section-label {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.75rem 0.5rem 0.5rem;
+        }
+
+        .sidebar-session-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 2px;
+            position: relative;
+        }
+
+        .sidebar-session-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .sidebar-session-item.active {
+            background: var(--bg-tertiary);
+        }
+
+        .sidebar-session-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: var(--accent);
+            border-radius: 0 2px 2px 0;
+        }
+
+        .sidebar-session-icon {
+            width: 18px;
+            height: 18px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .sidebar-session-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .sidebar-session-title {
+            font-size: 0.8125rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-session-meta {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Session tooltip on hover */
+        .sidebar-session-item .session-tooltip {
+            display: none;
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 8px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            white-space: nowrap;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar-session-item:hover .session-tooltip {
+            display: block;
+        }
+
+        .session-tooltip-title {
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .session-tooltip-meta {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+        }
+
+        .session-tooltip-meta span {
+            display: block;
+            margin-bottom: 0.125rem;
+        }
+
+        .sidebar-session-actions {
+            display: flex;
+            gap: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar-session-item:hover .sidebar-session-actions {
+            opacity: 1;
+        }
+
+        .sidebar-action-btn {
+            padding: 0.25rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-action-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .sidebar-action-btn.delete:hover {
+            color: var(--danger);
+        }
+
+        .sidebar-footer {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 101;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--bg-tertiary);
+        }
+
+        /* Main content area */
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
             padding: 2rem;
+            position: relative;
         }
         
         .mono { font-family: 'JetBrains Mono', monospace; }
-        
+
         .container {
             max-width: 600px;
             margin: 0 auto;
-            padding-top: 2rem;
+            padding-top: 1rem;
         }
         
         h1 {
@@ -72,6 +540,8 @@
             bottom: 1.5rem;
             right: 1.5rem;
             width: 600px;
+            min-width: 350px;
+            max-width: 800px;
             max-height: 85vh;
             background: rgba(20, 20, 22, 0.95);
             backdrop-filter: blur(20px);
@@ -83,7 +553,12 @@
             flex-direction: column;
             z-index: 1000;
         }
-        
+
+        .overlay .resize-handle-horizontal {
+            left: -2px;
+            right: auto;
+        }
+
         .overlay.minimized {
             width: auto;
             height: auto;
@@ -161,30 +636,6 @@
             color: var(--text-secondary);
         }
         
-        .header-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .icon-btn {
-            padding: 0.5rem;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            cursor: pointer;
-            border-radius: 0.5rem;
-            transition: all 0.2s;
-        }
-        
-        .icon-btn:hover {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-        }
-        
-        .icon-btn.active {
-            background: rgba(99, 102, 241, 0.2);
-            color: var(--accent);
-        }
         
         /* Content sections */
         .overlay-content {
@@ -200,30 +651,46 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            position: relative;
+        }
+
+        .resizable-panel {
+            position: relative;
+            transition: none;
+        }
+
+        .resizable-panel .resize-handle-vertical {
+            bottom: 0;
         }
 
         #questionsList {
             max-height: 40vh;
-            min-height: 100px;
+            min-height: 60px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            scrollbar-width: thin;
-            scrollbar-color: var(--accent) transparent;
+            scrollbar-width: auto;
+            scrollbar-color: var(--text-secondary) var(--bg-tertiary);
+            resize: vertical;
         }
 
         #questionsList::-webkit-scrollbar {
-            width: 6px;
+            width: 8px;
         }
 
         #questionsList::-webkit-scrollbar-track {
-            background: transparent;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
         }
 
         #questionsList::-webkit-scrollbar-thumb {
+            background: var(--text-secondary);
+            border-radius: 4px;
+        }
+
+        #questionsList::-webkit-scrollbar-thumb:hover {
             background: var(--accent);
-            border-radius: 3px;
         }
 
         .section-label {
@@ -569,27 +1036,33 @@
             background: var(--bg-primary);
             border-radius: 0.5rem;
             max-height: 50vh;
-            min-height: 150px;
+            min-height: 80px;
             overflow-y: auto;
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.6875rem;
             color: var(--text-secondary);
             line-height: 1.5;
-            scrollbar-width: thin;
-            scrollbar-color: var(--accent) transparent;
+            scrollbar-width: auto;
+            scrollbar-color: var(--text-secondary) var(--bg-tertiary);
+            resize: vertical;
         }
 
         .transcript-box::-webkit-scrollbar {
-            width: 6px;
+            width: 8px;
         }
 
         .transcript-box::-webkit-scrollbar-track {
-            background: transparent;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
         }
 
         .transcript-box::-webkit-scrollbar-thumb {
+            background: var(--text-secondary);
+            border-radius: 4px;
+        }
+
+        .transcript-box::-webkit-scrollbar-thumb:hover {
             background: var(--accent);
-            border-radius: 3px;
         }
         
         .transcript-entry {
@@ -709,26 +1182,73 @@
             background: rgba(239, 68, 68, 0.3);
         }
         
-        /* Documents panel */
-        .docs-panel {
+        /* Documents section - collapsible */
+        .docs-section {
             border-bottom: 1px solid var(--border);
-            padding: 1rem;
-            max-height: 200px;
-            overflow-y: auto;
         }
-        
-        .docs-header {
+
+        .docs-toggle {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.75rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
         }
-        
-        .docs-header span {
-            font-size: 0.75rem;
+
+        .docs-toggle:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .docs-toggle-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
             color: var(--text-secondary);
         }
-        
+
+        .docs-toggle-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .docs-toggle .chevron {
+            color: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+
+        .docs-section.expanded .chevron {
+            transform: rotate(180deg);
+        }
+
+        .docs-list-container {
+            padding: 0 1rem 1rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .docs-list-container.hidden {
+            display: none;
+        }
+
+        .upload-btn-small {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            color: var(--accent);
+            cursor: pointer;
+            border-radius: 0.25rem;
+            transition: background 0.2s;
+        }
+
+        .upload-btn-small:hover {
+            background: var(--bg-tertiary);
+            color: #818cf8;
+        }
+
         .upload-btn {
             display: flex;
             align-items: center;
@@ -737,7 +1257,7 @@
             color: var(--accent);
             cursor: pointer;
         }
-        
+
         .upload-btn:hover {
             color: #818cf8;
         }
@@ -778,7 +1298,15 @@
             text-align: center;
             padding: 1rem;
         }
-        
+
+        /* Empty sessions state */
+        .empty-sessions {
+            padding: 2rem 1rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+        }
+
         /* Minimized state */
         .minimized-btn {
             padding: 1rem;
@@ -816,16 +1344,30 @@
 
         /* Responsive Design - Mobile First */
 
-        /* Mobile devices (up to 480px) */
-        @media screen and (max-width: 480px) {
-            body {
-                padding: 0;
+        /* Mobile devices (up to 768px) - sidebar collapses */
+        @media screen and (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-toggle {
+                display: flex;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+                padding-top: 4rem;
             }
 
             .container {
-                padding-top: 1rem;
-                padding-left: 1rem;
-                padding-right: 1rem;
+                padding-top: 0;
+                padding-left: 0;
+                padding-right: 0;
             }
 
             h1 {
@@ -843,28 +1385,30 @@
             }
 
             .overlay {
-                position: absolute;
-                top: 0;
+                position: relative;
                 bottom: auto;
-                left: 0;
-                right: 0;
+                right: auto;
                 width: 100%;
-                height: auto;
-                min-height: 100vh;
                 max-height: none;
-                border-radius: 0;
-                border: none;
-                overflow: visible;
-                display: block;
+                border-radius: 1rem;
+                margin-top: 1rem;
             }
 
-            body {
-                overflow-y: auto;
-                -webkit-overflow-scrolling: touch;
+            .user-guide-tab {
+                left: 1rem;
             }
 
-            html, body {
-                height: 100%;
+            .user-guide-panel {
+                left: 1rem;
+                width: calc(100vw - 2rem);
+            }
+
+            body.chat-mode .user-guide-tab {
+                left: 1rem;
+            }
+
+            body.chat-mode .user-guide-panel {
+                left: 1rem;
             }
 
             .overlay.minimized {
@@ -882,8 +1426,6 @@
 
             .overlay-header {
                 padding: 0.75rem;
-                padding-top: max(0.75rem, env(safe-area-inset-top));
-                border-bottom: 1px solid var(--border);
             }
 
             .header-info h3 {
@@ -896,8 +1438,6 @@
 
             .overlay-content {
                 padding: 0.75rem;
-                padding-bottom: max(1rem, env(safe-area-inset-bottom));
-                display: block;
             }
 
             .question-card,
@@ -905,24 +1445,9 @@
                 padding: 0.75rem;
             }
 
-            .question-input-container {
-                padding: 0.75rem;
-            }
-
-            .question-input-box input {
-                padding: 0.625rem;
-                font-size: 0.8125rem;
-            }
-
-            .question-input-box button {
-                padding: 0.625rem 1rem;
-                font-size: 0.8125rem;
-            }
-
             .docs-panel {
                 padding: 0.75rem;
                 max-height: 150px;
-                flex-shrink: 0;
             }
 
             .answer-panel {
@@ -936,28 +1461,18 @@
             #questionsList {
                 max-height: 250px;
             }
-        }
 
-        /* Small tablets and large phones (481px - 768px) */
-        @media screen and (min-width: 481px) and (max-width: 768px) {
-            body {
-                padding: 1.5rem;
+            .auth-container {
+                top: 0.5rem;
+                right: 0.5rem;
             }
 
-            h1 {
-                font-size: 2rem;
-            }
-
-            .overlay {
-                width: calc(100% - 2rem);
-                max-width: 500px;
-                bottom: 1rem;
-                right: 1rem;
-                max-height: 80vh;
+            .auth-user-info {
+                display: none;
             }
         }
 
-        /* Tablets and small laptops (769px - 1024px) */
+        /* Tablets (769px - 1024px) */
         @media screen and (min-width: 769px) and (max-width: 1024px) {
             .overlay {
                 width: 500px;
@@ -972,52 +1487,18 @@
             }
         }
 
-        /* Handle very small screens */
-        @media screen and (max-width: 320px) {
-            body {
-                padding: 0.75rem;
-            }
-
-            h1 {
-                font-size: 1.5rem;
-            }
-
-            .glass {
-                padding: 0.75rem;
-            }
-
-            .header-actions {
-                gap: 0.25rem;
-            }
-
-            .icon-btn {
-                padding: 0.375rem;
-            }
-        }
-
-        /* Landscape mode on mobile */
-        @media screen and (max-width: 768px) and (orientation: landscape) {
-            .overlay {
-                max-height: 90vh;
-            }
-
-            .container {
-                display: none; /* Hide background content in landscape to give more space */
-            }
-        }
-
         /* Touch-friendly adjustments for mobile */
         @media (hover: none) and (pointer: coarse) {
             .question-card,
             .suggestion-card,
             .icon-btn,
-            .main-btn {
-                min-height: 44px; /* Apple's recommended minimum touch target */
+            .main-btn,
+            .sidebar-session-item {
+                min-height: 44px;
             }
 
             .question-card:hover,
             .suggestion-card:hover {
-                /* Disable hover effects on touch devices */
                 background: inherit;
             }
 
@@ -1029,63 +1510,133 @@
             .suggestion-card:active {
                 background: #252528;
             }
+
+            .sidebar-session-actions {
+                opacity: 1;
+            }
         }
 
-        /* Authentication UI */
+        /* Authentication UI - Profile Dropdown */
         .auth-container {
             position: fixed;
             top: 1rem;
             right: 1rem;
             z-index: 1001;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
         }
 
-        .auth-user {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 0.75rem;
-        }
-
-        .auth-user-avatar {
-            width: 28px;
-            height: 28px;
+        .auth-profile-btn {
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: var(--accent);
+            border: 2px solid var(--border);
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
+            font-size: 0.875rem;
             font-weight: 600;
             color: white;
             overflow: hidden;
+            transition: all 0.2s;
+            position: relative;
         }
 
-        .auth-user-avatar img {
+        .auth-profile-btn:hover {
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .auth-profile-btn img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        .auth-user-info {
-            display: flex;
-            flex-direction: column;
+        .auth-dropdown {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            right: 0;
+            width: 220px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: none !important;
         }
 
-        .auth-user-name {
-            font-size: 0.75rem;
+        .auth-dropdown.open {
+            display: block !important;
+        }
+
+        .auth-dropdown-header {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0.5rem;
+        }
+
+        .auth-dropdown-name {
+            font-size: 0.875rem;
             font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.125rem;
+        }
+
+        .auth-dropdown-email {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        .auth-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 0.5rem;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .auth-dropdown-item:hover {
+            background: var(--bg-tertiary);
             color: var(--text-primary);
         }
 
-        .auth-user-email {
-            font-size: 0.625rem;
+        .auth-dropdown-item.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        .dev-mode-badge {
+            font-size: 0.5625rem;
+            padding: 0.125rem 0.375rem;
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border-radius: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 0.5rem;
+        }
+
+        .auth-loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
             color: var(--text-secondary);
+            font-size: 0.8125rem;
         }
 
         .auth-btn {
@@ -1103,37 +1654,6 @@
 
         .auth-btn:hover {
             background: #5558e3;
-        }
-
-        .auth-btn-secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-        }
-
-        .auth-btn-secondary:hover {
-            background: #252528;
-        }
-
-        .dev-mode-badge {
-            font-size: 0.625rem;
-            padding: 0.125rem 0.375rem;
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-            border-radius: 0.25rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .auth-loading {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 0.75rem;
-            color: var(--text-secondary);
-            font-size: 0.8125rem;
         }
 
         /* Login overlay */
@@ -1199,7 +1719,60 @@
     </style>
 </head>
 <body>
-    <!-- Authentication Container -->
+    <!-- Mobile sidebar toggle -->
+    <button class="sidebar-toggle" id="sidebarToggle">
+        <svg class="icon" viewBox="0 0 24 24">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+    </button>
+
+    <!-- Left Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="resize-handle resize-handle-horizontal" id="sidebarResizeHandle"></div>
+        <div class="sidebar-header">
+            <button class="new-session-btn-large" id="newSessionBtnSidebar">
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Session
+            </button>
+        </div>
+        <div class="sidebar-sessions" id="sidebarSessions">
+            <div class="sidebar-section-label">Recent Sessions</div>
+            <div id="sidebarSessionsList"></div>
+        </div>
+        <div class="sidebar-footer">
+            <!-- View Mode Toggle -->
+            <div class="view-mode-toggle">
+                <button class="view-mode-btn" id="overlayModeBtn" title="Floating overlay">
+                    <svg class="icon-xs" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <rect x="9" y="9" width="12" height="12" rx="1"/>
+                    </svg>
+                    Overlay
+                </button>
+                <button class="view-mode-btn active" id="chatModeBtn" title="Full chat view">
+                    <svg class="icon-xs" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <line x1="3" y1="9" x2="21" y2="9"/>
+                    </svg>
+                    Full Chat
+                </button>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-secondary); text-align: center;">
+                <svg class="icon-xs" viewBox="0 0 24 24" style="display: inline; vertical-align: middle; margin-right: 0.25rem;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Sessions auto-save
+            </div>
+        </div>
+    </aside>
+
+    <!-- Authentication Container - Fixed position outside main-content -->
     <div class="auth-container" id="authContainer">
         <div class="auth-loading" id="authLoading">
             <div class="spinner"></div>
@@ -1207,48 +1780,100 @@
         </div>
     </div>
 
-    <!-- Login Overlay (shown when auth required but not logged in) -->
-    <div class="login-overlay hidden" id="loginOverlay">
-        <div class="login-card">
-            <h2>Welcome</h2>
-            <p>Sign in to access your personalized meeting assistant with document storage and AI-powered insights.</p>
-            <button class="auth-btn" id="loginBtn">Sign In</button>
-        </div>
-    </div>
+    <!-- Main Content -->
+    <div class="main-content">
 
-    <div class="container">
-        <h1>Meeting Assistant</h1>
-        <p class="subtitle">
-            AI-powered real-time meeting companion. Listens to conversations,
-            detects questions instantly, and provides intelligent answers with
-            speaker identification.
-        </p>
-        
-        <div class="glass">
-            <h2 style="font-size: 1.125rem; margin-bottom: 0.75rem;">How it works</h2>
-            <div style="display: flex; flex-direction: column; gap: 0.75rem; color: var(--text-secondary); font-size: 0.875rem;">
-                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-                    <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">1</span>
-                    <span>Click "Start Listening" and allow microphone access</span>
-                </div>
-                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-                    <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">2</span>
-                    <span>Keep speakers on - the assistant hears and identifies speakers</span>
-                </div>
-                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-                    <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">3</span>
-                    <span>Questions are detected instantly with speaker labels</span>
-                </div>
-                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-                    <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">4</span>
-                    <span>Click any question for AI-powered answers with web search</span>
+        <!-- Login Overlay (shown when auth required but not logged in) -->
+        <div class="login-overlay hidden" id="loginOverlay">
+            <div class="login-card">
+                <h2>Welcome</h2>
+                <p>Sign in to access your personalized meeting assistant with document storage and AI-powered insights.</p>
+                <button class="auth-btn" id="loginBtn">Sign In</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <h1>Meeting Assistant</h1>
+            <p class="subtitle">
+                AI-powered real-time meeting companion. Listens to conversations,
+                detects questions instantly, and provides intelligent answers with
+                speaker identification.
+            </p>
+
+            <div class="glass">
+                <h2 style="font-size: 1.125rem; margin-bottom: 0.75rem;">How it works</h2>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; color: var(--text-secondary); font-size: 0.875rem;">
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">1</span>
+                        <span>Click "Start Listening" and allow microphone access</span>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">2</span>
+                        <span>Keep speakers on - the assistant hears and identifies speakers</span>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">3</span>
+                        <span>Questions are detected instantly with speaker labels</span>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <span style="width: 24px; height: 24px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">4</span>
+                        <span>Click any question for AI-powered answers with web search</span>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- User Guide Tab (for chat mode) -->
+        <div class="user-guide-tab" id="userGuideTab">
+            <button class="user-guide-btn" id="userGuideBtn">
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                User Guide
+            </button>
+        </div>
+
+        <!-- User Guide Panel -->
+        <div class="user-guide-panel" id="userGuidePanel">
+            <h2>
+                <svg class="icon-sm" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                How it works
+                <button class="user-guide-close" id="userGuideClose">
+                    <svg class="icon-sm" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </h2>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; color: var(--text-secondary); font-size: 0.8125rem;">
+                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                    <span style="width: 22px; height: 22px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.6875rem; font-weight: 600; flex-shrink: 0;">1</span>
+                    <span>Click the microphone icon to start listening</span>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                    <span style="width: 22px; height: 22px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.6875rem; font-weight: 600; flex-shrink: 0;">2</span>
+                    <span>The assistant will transcribe and detect questions</span>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                    <span style="width: 22px; height: 22px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.6875rem; font-weight: 600; flex-shrink: 0;">3</span>
+                    <span>Click any question for AI-powered answers</span>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                    <span style="width: 22px; height: 22px; border-radius: 50%; background: rgba(99, 102, 241, 0.2); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 0.6875rem; font-weight: 600; flex-shrink: 0;">4</span>
+                    <span>Upload documents for context-aware answers</span>
+                </div>
+            </div>
+        </div>
     
     <!-- Floating Overlay -->
     <div class="overlay" id="overlay">
+        <div class="resize-handle resize-handle-horizontal" id="overlayResizeHandle"></div>
         <div class="overlay-header" id="overlayHeader">
             <div class="header-left">
                 <div class="mic-indicator" id="micIndicator">
@@ -1264,50 +1889,37 @@
                     <p id="statusText">Click to start</p>
                 </div>
             </div>
-            <div class="header-actions">
-                <button class="icon-btn" id="clearConversationBtn" title="Clear Conversation">
-                    <svg class="icon" viewBox="0 0 24 24">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                </button>
-                <button class="icon-btn" id="docsBtn" title="Documents">
-                    <svg class="icon" viewBox="0 0 24 24">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
-                </button>
-                <button class="icon-btn" id="minimizeBtn" title="Minimize">
-                    <svg class="icon" viewBox="0 0 24 24">
-                        <polyline points="4 14 10 14 10 20"/>
-                        <polyline points="20 10 14 10 14 4"/>
-                        <line x1="14" y1="10" x2="21" y2="3"/>
-                        <line x1="3" y1="21" x2="10" y2="14"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Documents Panel -->
-        <div class="docs-panel hidden" id="docsPanel">
-            <div class="docs-header">
-                <span>Documents (<span id="docCount">0</span>)</span>
-                <label class="upload-btn">
-                    <svg class="icon-sm" viewBox="0 0 24 24">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="17 8 12 3 7 8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    Upload
-                    <input type="file" id="fileInput" accept=".txt,.md,.json,.csv,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp" style="display: none;">
-                </label>
-            </div>
-            <div id="docsList"></div>
         </div>
         
         <div class="overlay-content" id="overlayContent">
+            <!-- Documents Section - Collapsible -->
+            <div class="docs-section" id="docsSection">
+                <div class="docs-toggle" id="docsToggle">
+                    <div class="docs-toggle-left">
+                        <svg class="icon-sm" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span>Documents (<span id="docCount">0</span>)</span>
+                    </div>
+                    <div class="docs-toggle-right">
+                        <label class="upload-btn-small" title="Upload document">
+                            <svg class="icon-sm" viewBox="0 0 24 24">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <input type="file" id="fileInput" accept=".txt,.md,.json,.csv,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp" multiple style="display: none;">
+                        </label>
+                        <svg class="icon-sm chevron" viewBox="0 0 24 24" id="docsChevron">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="docs-list-container hidden" id="docsListContainer">
+                    <div id="docsList"></div>
+                </div>
+            </div>
             <!-- Detected Questions -->
             <div class="questions-section" id="questionsSection">
                 <div class="section-label">
@@ -1385,12 +1997,11 @@
             </div>
         </div>
     </div>
+    </div> <!-- End main-content -->
 
     <script>
         // State
         let isListening = false;
-        let isMinimized = false;
-        let showDocs = false;
         let showTranscript = false;
         let clientWs = null;
         let audioWs = null;
@@ -1408,15 +2019,25 @@
         let isDevMode = false;
         let clerkInstance = null;
 
+        // Session state
+        let currentSessionId = null;
+        let sessions = [];
+        let showSessions = false;
+
+        // Idle timeout for auto-session creation (1 hour)
+        const IDLE_TIMEOUT = 60 * 60 * 1000;
+        let lastActivityTime = Date.now();
+        let idleCheckInterval = null;
+
         // DOM elements
         const overlay = document.getElementById('overlay');
         const overlayHeader = document.getElementById('overlayHeader');
         const micIndicator = document.getElementById('micIndicator');
         const liveDot = document.getElementById('liveDot');
         const statusText = document.getElementById('statusText');
-        const docsBtn = document.getElementById('docsBtn');
-        const minimizeBtn = document.getElementById('minimizeBtn');
-        const docsPanel = document.getElementById('docsPanel');
+        const docsSection = document.getElementById('docsSection');
+        const docsToggle = document.getElementById('docsToggle');
+        const docsListContainer = document.getElementById('docsListContainer');
         const docsList = document.getElementById('docsList');
         const docCount = document.getElementById('docCount');
         const fileInput = document.getElementById('fileInput');
@@ -1436,6 +2057,12 @@
         const clearSelectionBtn = document.getElementById('clearSelectionBtn');
         const overlayContent = document.getElementById('overlayContent');
 
+        // Sidebar DOM elements
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebarSessionsList = document.getElementById('sidebarSessionsList');
+        const newSessionBtnSidebar = document.getElementById('newSessionBtnSidebar');
+
         // Auth DOM elements
         const authContainer = document.getElementById('authContainer');
         const authLoading = document.getElementById('authLoading');
@@ -1452,6 +2079,9 @@
         const WS_BASE = window.location.protocol === 'https:'
             ? `wss://${window.location.host}`
             : `ws://${window.location.host}`;
+
+        // API base URL
+        const API_BASE = window.location.origin;
 
         // Authentication functions
         function loadClerkScript(publishableKey) {
@@ -1592,19 +2222,51 @@
                     : initials;
 
                 authContainer.innerHTML = `
-                    <div class="auth-user">
-                        <div class="auth-user-avatar">${avatarContent}</div>
-                        <div class="auth-user-info">
-                            <span class="auth-user-name">${escapeHtml(currentUser.fullName || 'User')}</span>
-                            <span class="auth-user-email">${escapeHtml(currentUser.email || '')}</span>
+                    <button class="auth-profile-btn" id="profileBtn">${avatarContent}</button>
+                    <div class="auth-dropdown" id="authDropdown">
+                        <div class="auth-dropdown-header">
+                            <div class="auth-dropdown-name">
+                                ${escapeHtml(currentUser.fullName || 'User')}
+                                ${isDevMode ? '<span class="dev-mode-badge">Dev</span>' : ''}
+                            </div>
+                            <div class="auth-dropdown-email">${escapeHtml(currentUser.email || '')}</div>
                         </div>
-                        ${isDevMode ? '<span class="dev-mode-badge">Dev Mode</span>' : ''}
+                        ${!isDevMode ? `
+                        <button class="auth-dropdown-item danger" onclick="signOut()">
+                            <svg class="icon-sm" viewBox="0 0 24 24">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                <polyline points="16 17 21 12 16 7"/>
+                                <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                            Sign Out
+                        </button>
+                        ` : ''}
                     </div>
-                    ${!isDevMode ? '<button class="auth-btn auth-btn-secondary" onclick="signOut()">Sign Out</button>' : ''}
                 `;
+
+                // Add dropdown toggle
+                const profileBtn = document.getElementById('profileBtn');
+                const authDropdown = document.getElementById('authDropdown');
+
+                profileBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    authDropdown.classList.toggle('open');
+                };
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!authContainer.contains(e.target)) {
+                        authDropdown.classList.remove('open');
+                    }
+                });
             } else {
                 authContainer.innerHTML = `
-                    <button class="auth-btn" onclick="signIn()">Sign In</button>
+                    <button class="auth-profile-btn" onclick="signIn()" title="Sign In">
+                        <svg class="icon-sm" viewBox="0 0 24 24" style="stroke: white;">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </button>
                 `;
             }
         }
@@ -1662,6 +2324,12 @@
         // Connect to client WebSocket with authentication
         let isIntentionalClose = false;
         async function connectClient() {
+            // Must have a session_id to connect
+            if (!currentSessionId) {
+                console.log('No session_id, skipping client WebSocket connection');
+                return;
+            }
+
             // Close existing connection if any
             if (clientWs && clientWs.readyState !== WebSocket.CLOSED) {
                 isIntentionalClose = true;
@@ -1670,9 +2338,11 @@
             }
 
             const token = await getAuthToken();
-            const wsUrl = token
-                ? `${WS_BASE}/ws/client?token=${encodeURIComponent(token)}`
-                : `${WS_BASE}/ws/client`;
+            let wsUrl = token
+                ? `${WS_BASE}/ws/client?token=${encodeURIComponent(token)}&session_id=${encodeURIComponent(currentSessionId)}`
+                : `${WS_BASE}/ws/client?session_id=${encodeURIComponent(currentSessionId)}`;
+
+            console.log('Connecting client WebSocket with session:', currentSessionId);
 
             isIntentionalClose = false;
             clientWs = new WebSocket(wsUrl);
@@ -1683,7 +2353,7 @@
             };
 
             clientWs.onclose = () => {
-                if (!isIntentionalClose) {
+                if (!isIntentionalClose && currentSessionId) {
                     setTimeout(connectClient, 2000);
                 }
             };
@@ -1698,6 +2368,28 @@
                     renderTranscript(msg.data.transcript);
                     renderQuestions(msg.data.questions);
                     renderSuggestions(msg.data.suggestions);
+                    if (msg.data.sessionId) {
+                        currentSessionId = msg.data.sessionId;
+                        updateCurrentSessionUI();
+                    }
+                    break;
+
+                case 'session_loaded':
+                    // Session data loaded after switch
+                    currentSessionId = msg.data.sessionId;
+                    renderTranscript(msg.data.transcript);
+                    renderQuestions(msg.data.questions);
+                    renderSuggestions(msg.data.suggestions);
+                    updateCurrentSessionUI();
+                    break;
+
+                case 'session_created':
+                    // New session created
+                    currentSessionId = msg.data.sessionId;
+                    updateCurrentSessionUI();
+                    loadSessions(); // Refresh session list
+                    // Clear UI for new session
+                    clearUI();
                     break;
 
                 case 'transcript':
@@ -1752,6 +2444,35 @@
         async function startListening() {
             console.log('startListening called');
             try {
+                // Create a session via API if one doesn't exist
+                if (!currentSessionId) {
+                    console.log('No session exists, creating one via API...');
+                    const response = await fetch(`${API_BASE}/api/sessions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                        },
+                        body: JSON.stringify({ title: null })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to create session');
+                    }
+
+                    const session = await response.json();
+                    currentSessionId = session.id;
+                    console.log('Created session:', currentSessionId);
+
+                    // Reconnect client WebSocket with the new session_id
+                    await connectClient();
+                    // Wait for WebSocket to connect
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // Refresh sessions list
+                    loadSessions();
+                }
+
                 console.log('Requesting microphone access...');
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -1773,9 +2494,14 @@
                 // Get auth token for audio WebSocket
                 const token = await getAuthToken();
                 console.log('Got auth token:', token ? 'yes' : 'no');
-                const wsUrl = token
+                let wsUrl = token
                     ? `${WS_BASE}/ws/audio?token=${encodeURIComponent(token)}`
                     : `${WS_BASE}/ws/audio`;
+
+                // Add session_id if available
+                if (currentSessionId) {
+                    wsUrl += `${token ? '&' : '?'}session_id=${encodeURIComponent(currentSessionId)}`;
+                }
                 console.log('Connecting to audio WebSocket:', wsUrl);
 
                 isAudioIntentionalClose = false;
@@ -1819,23 +2545,44 @@
                 
             } catch (error) {
                 console.error('Failed to access microphone:', error);
-                alert('Could not access microphone. Please check permissions.');
+                let message = 'Could not access microphone. ';
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    message += 'Please allow microphone access in your browser settings.';
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    message += 'No microphone found. Please connect a microphone.';
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    message += 'Microphone is in use by another application.';
+                } else {
+                    message += error.message || 'Unknown error occurred.';
+                }
+                alert(message);
+                statusText.textContent = 'Microphone access denied';
             }
         }
         
         function startRecording(stream) {
             mediaStream = stream;
-            audioContext = new AudioContext({ sampleRate: 16000 });
+            // Use browser's native sample rate - Deepgram handles the sample rate
+            audioContext = new AudioContext();
+            const nativeSampleRate = audioContext.sampleRate;
+            console.log('Native sample rate:', nativeSampleRate);
+
+            // Store sample rate to send to server
+            window.audioSampleRate = nativeSampleRate;
+
             audioSource = audioContext.createMediaStreamSource(stream);
             audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
 
             audioProcessor.onaudioprocess = (e) => {
                 if (audioWs && audioWs.readyState === WebSocket.OPEN) {
                     const inputData = e.inputBuffer.getChannelData(0);
-                    const pcmData = new Int16Array(inputData.length);
 
+                    // Convert float32 [-1, 1] to 16-bit PCM directly (no resampling)
+                    const pcmData = new Int16Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
-                        pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                        // Clamp and convert to 16-bit signed integer
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
 
                     audioWs.send(pcmData.buffer);
@@ -1889,10 +2636,18 @@
                 micIndicator.classList.add('active');
                 liveDot.classList.remove('hidden');
                 statusText.textContent = 'Listening... (Click to stop)';
+                document.body.classList.add('session-active');
+                // Auto-expand transcript box when recording starts
+                if (!showTranscript) {
+                    showTranscript = true;
+                    transcriptBox.classList.remove('hidden');
+                    transcriptActions.classList.toggle('hidden', selectedTranscriptEntries.size === 0);
+                }
             } else {
                 micIndicator.classList.remove('active');
                 liveDot.classList.add('hidden');
                 statusText.textContent = 'Click to start';
+                document.body.classList.remove('session-active');
             }
         }
         
@@ -2239,11 +2994,228 @@
                 submitManualQuestion();
             }
         };
-        
+
+        // Sessions - Sidebar based
+        async function loadSessions() {
+            try {
+                const res = await fetch('/api/sessions', {
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
+                const data = await res.json();
+                sessions = data.sessions || [];
+                renderSidebarSessions();
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+            }
+        }
+
+        function renderSidebarSessions() {
+            if (sessions.length === 0) {
+                sidebarSessionsList.innerHTML = '<div class="empty-sessions">No previous sessions.<br>Start a new one!</div>';
+                return;
+            }
+
+            sidebarSessionsList.innerHTML = sessions.map(s => `
+                <div class="sidebar-session-item ${s.id === currentSessionId ? 'active' : ''}" data-session-id="${s.id}">
+                    <svg class="sidebar-session-icon" viewBox="0 0 24 24">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <div class="sidebar-session-content">
+                        <div class="sidebar-session-title">${escapeHtml(s.title)}</div>
+                        <div class="sidebar-session-meta">${s.question_count || 0} questions · ${formatSessionDate(s.updated_at)}</div>
+                    </div>
+                    <div class="sidebar-session-actions">
+                        <button class="sidebar-action-btn" onclick="event.stopPropagation(); clearSessionData('${s.id}')" title="Clear session data">
+                            <svg class="icon-xs" viewBox="0 0 24 24">
+                                <path d="M3 6h18"/>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                        <button class="sidebar-action-btn delete" onclick="event.stopPropagation(); deleteSession('${s.id}')" title="Delete session">
+                            <svg class="icon-xs" viewBox="0 0 24 24">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="session-tooltip">
+                        <div class="session-tooltip-title">${escapeHtml(s.title)}</div>
+                        <div class="session-tooltip-meta">
+                            <span>${s.question_count || 0} questions detected</span>
+                            <span>Created: ${formatFullDate(s.created_at)}</span>
+                            <span>Updated: ${formatFullDate(s.updated_at)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add click handlers for session switching
+            sidebarSessionsList.querySelectorAll('.sidebar-session-item').forEach(item => {
+                item.onclick = () => switchSession(item.dataset.sessionId);
+            });
+        }
+
+        function formatSessionDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function formatFullDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function updateCurrentSessionUI() {
+            renderSidebarSessions(); // Update active state in sidebar
+        }
+
+        async function createNewSession() {
+            // Stop audio if listening before creating new session
+            if (isListening) {
+                stopListening();
+                statusText.textContent = 'Session changed - click to start';
+            }
+
+            try {
+                // Create session via API
+                const response = await fetch(`${API_BASE}/api/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
+                    body: JSON.stringify({ title: null })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create session');
+                }
+
+                const session = await response.json();
+                currentSessionId = session.id;
+                console.log('Created new session:', currentSessionId);
+
+                // Clear UI for new session
+                clearUI();
+
+                // Reconnect client WebSocket with new session
+                await connectClient();
+
+                // Refresh session list
+                await loadSessions();
+            } catch (error) {
+                console.error('Failed to create session:', error);
+            }
+        }
+
+        async function switchSession(sessionId) {
+            if (sessionId === currentSessionId) return;
+
+            // Stop audio when switching sessions
+            if (isListening) {
+                stopListening();
+                statusText.textContent = 'Session changed - click to start';
+            }
+
+            // Update current session and reconnect with new session_id
+            currentSessionId = sessionId;
+            await connectClient();
+            updateCurrentSessionUI();
+
+            // Close sidebar on mobile after switching
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+            }
+        }
+
+        async function clearSessionData(sessionId) {
+            if (!confirm('Clear all transcript and questions for this session?')) return;
+
+            // If it's the current session, clear the UI
+            if (sessionId === currentSessionId) {
+                clearUI();
+                lastFinalTranscript = '';
+                selectedTranscriptEntries.clear();
+
+                // Clear server state
+                if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'clear' }));
+                }
+            } else {
+                // For other sessions, we'd need an API endpoint to clear them
+                // For now, just notify user
+                console.log('Clear session data for:', sessionId);
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (!confirm('Delete this session? This cannot be undone.')) return;
+
+            try {
+                const res = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'DELETE',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
+                if (res.ok) {
+                    sessions = sessions.filter(s => s.id !== sessionId);
+                    renderSidebarSessions();
+                    if (sessionId === currentSessionId) {
+                        // Clear UI immediately when current session is deleted
+                        clearUI();
+                        currentSessionId = null;
+                        // Create new session
+                        createNewSession();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to delete session:', error);
+            }
+        }
+
+        // Auto-create session on app load or after idle
+        function checkIdleAndCreateSession() {
+            const now = Date.now();
+            if (now - lastActivityTime > IDLE_TIMEOUT) {
+                console.log('Idle timeout reached, creating new session');
+                createNewSession();
+                lastActivityTime = now;
+            }
+        }
+
+        function resetActivityTimer() {
+            lastActivityTime = Date.now();
+        }
+
+        function startIdleCheck() {
+            // Check for idle every minute
+            idleCheckInterval = setInterval(checkIdleAndCreateSession, 60000);
+
+            // Track user activity
+            document.addEventListener('click', resetActivityTimer);
+            document.addEventListener('keypress', resetActivityTimer);
+            document.addEventListener('mousemove', resetActivityTimer);
+        }
+
         // Documents
         async function loadDocuments() {
             try {
-                const res = await fetch('/api/documents');
+                const res = await fetch('/api/documents', {
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
                 const data = await res.json();
                 documents = data.documents || [];
                 renderDocuments();
@@ -2277,18 +3249,25 @@
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);
-            
+
             try {
-                await fetch('/api/documents', { method: 'POST', body: formData });
+                await fetch('/api/documents', {
+                    method: 'POST',
+                    body: formData,
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
                 await loadDocuments();
             } catch (error) {
                 console.error('Upload failed:', error);
             }
         }
-        
+
         async function deleteDocument(id) {
             try {
-                await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+                await fetch(`/api/documents/${id}`, {
+                    method: 'DELETE',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
                 await loadDocuments();
             } catch (error) {
                 console.error('Delete failed:', error);
@@ -2312,10 +3291,6 @@
         
         // Event listeners
         overlayHeader.onclick = (e) => {
-            // Prevent triggering when clicking on buttons in header
-            if (e.target.closest('.header-actions')) {
-                return;
-            }
             if (isListening) {
                 stopListening();
             } else {
@@ -2323,54 +3298,35 @@
             }
         };
 
-        docsBtn.onclick = () => {
-            showDocs = !showDocs;
-            docsPanel.classList.toggle('hidden', !showDocs);
-            docsBtn.classList.toggle('active', showDocs);
+        // Documents section toggle
+        docsToggle.onclick = (e) => {
+            // Prevent toggle when clicking upload button
+            if (e.target.closest('.upload-btn-small')) {
+                return;
+            }
+            docsSection.classList.toggle('expanded');
+            docsListContainer.classList.toggle('hidden');
         };
 
-        // Clear conversation button
-        const clearConversationBtn = document.getElementById('clearConversationBtn');
-        clearConversationBtn.onclick = () => {
-            if (confirm('Clear all transcript and detected questions?')) {
-                // Clear local state
-                transcriptBox.innerHTML = '';
-                questionsList.innerHTML = '';
-                questionsSection.classList.add('hidden');
-                answerPanel.classList.add('hidden');
-                lastFinalTranscript = '';
-                selectedTranscriptEntries.clear();
+        // Sidebar toggle for mobile
+        sidebarToggle.onclick = () => {
+            sidebar.classList.toggle('open');
+        };
 
-                // Clear server state
-                if (clientWs && clientWs.readyState === WebSocket.OPEN) {
-                    clientWs.send(JSON.stringify({ type: 'clear' }));
+        // New session button in sidebar
+        newSessionBtnSidebar.onclick = () => {
+            createNewSession();
+        };
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
                 }
             }
-        };
+        });
 
-        minimizeBtn.onclick = () => {
-            isMinimized = !isMinimized;
-            if (isMinimized) {
-                overlay.innerHTML = `
-                    <button class="minimized-btn" onclick="restore()">
-                        <div class="mic-indicator ${isListening ? 'active' : ''}">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                                <line x1="12" y1="19" x2="12" y2="22"/>
-                            </svg>
-                            ${isListening ? '<div class="live-dot"></div>' : ''}
-                        </div>
-                    </button>
-                `;
-                overlay.classList.add('minimized');
-            }
-        };
-        
-        window.restore = () => {
-            location.reload(); // Simple restore
-        };
-        
         transcriptToggle.onclick = () => {
             showTranscript = !showTranscript;
             transcriptBox.classList.toggle('hidden', !showTranscript);
@@ -2414,9 +3370,11 @@
             clearTranscriptSelection();
         };
         
-        fileInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) uploadDocument(file);
+        fileInput.onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                await uploadDocument(file);
+            }
             e.target.value = '';
         };
 
@@ -2425,10 +3383,176 @@
             loginBtn.onclick = signIn;
         }
 
+        // ============= Resize functionality =============
+        function initResizeHandlers() {
+            const sidebarResizeHandle = document.getElementById('sidebarResizeHandle');
+            const overlayResizeHandle = document.getElementById('overlayResizeHandle');
+            const mainContent = document.querySelector('.main-content');
+
+            // Sidebar resize
+            if (sidebarResizeHandle) {
+                let isResizing = false;
+                let startX, startWidth;
+
+                sidebarResizeHandle.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    startX = e.clientX;
+                    startWidth = sidebar.offsetWidth;
+                    sidebarResizeHandle.classList.add('active');
+                    document.body.style.cursor = 'ew-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isResizing) return;
+                    const diff = e.clientX - startX;
+                    const newWidth = Math.min(400, Math.max(200, startWidth + diff));
+                    sidebar.style.width = newWidth + 'px';
+                    mainContent.style.marginLeft = newWidth + 'px';
+                    // Save to localStorage
+                    localStorage.setItem('sidebarWidth', newWidth);
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        sidebarResizeHandle.classList.remove('active');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }
+                });
+            }
+
+            // Overlay resize
+            if (overlayResizeHandle) {
+                let isResizing = false;
+                let startX, startWidth;
+
+                overlayResizeHandle.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    startX = e.clientX;
+                    startWidth = overlay.offsetWidth;
+                    overlayResizeHandle.classList.add('active');
+                    document.body.style.cursor = 'ew-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isResizing) return;
+                    // Overlay resizes from the left (opposite direction)
+                    const diff = startX - e.clientX;
+                    const newWidth = Math.min(800, Math.max(350, startWidth + diff));
+                    overlay.style.width = newWidth + 'px';
+                    // Save to localStorage
+                    localStorage.setItem('overlayWidth', newWidth);
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        overlayResizeHandle.classList.remove('active');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }
+                });
+            }
+
+            // Restore saved sizes
+            const savedSidebarWidth = localStorage.getItem('sidebarWidth');
+            if (savedSidebarWidth && window.innerWidth > 768) {
+                sidebar.style.width = savedSidebarWidth + 'px';
+                mainContent.style.marginLeft = savedSidebarWidth + 'px';
+            }
+
+            const savedOverlayWidth = localStorage.getItem('overlayWidth');
+            if (savedOverlayWidth) {
+                overlay.style.width = savedOverlayWidth + 'px';
+            }
+        }
+
+        // Initialize resize handlers on page load
+        initResizeHandlers();
+
+        // ============= View Mode Toggle =============
+        const overlayModeBtn = document.getElementById('overlayModeBtn');
+        const chatModeBtn = document.getElementById('chatModeBtn');
+        const userGuideBtn = document.getElementById('userGuideBtn');
+        const userGuidePanel = document.getElementById('userGuidePanel');
+        const userGuideClose = document.getElementById('userGuideClose');
+        const userGuideTab = document.getElementById('userGuideTab');
+
+        let currentViewMode = localStorage.getItem('viewMode') || 'chat';
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            localStorage.setItem('viewMode', mode);
+
+            if (mode === 'chat') {
+                document.body.classList.add('chat-mode');
+                chatModeBtn.classList.add('active');
+                overlayModeBtn.classList.remove('active');
+                userGuideTab.style.display = 'block';
+            } else {
+                document.body.classList.remove('chat-mode');
+                overlayModeBtn.classList.add('active');
+                chatModeBtn.classList.remove('active');
+                userGuideTab.style.display = 'none';
+                userGuidePanel.classList.remove('open');
+            }
+        }
+
+        overlayModeBtn.onclick = () => setViewMode('overlay');
+        chatModeBtn.onclick = () => setViewMode('chat');
+
+        // User Guide Panel
+        userGuideBtn.onclick = () => {
+            userGuidePanel.classList.toggle('open');
+        };
+
+        userGuideClose.onclick = () => {
+            userGuidePanel.classList.remove('open');
+        };
+
+        // Close user guide when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!userGuidePanel.contains(e.target) && !userGuideBtn.contains(e.target)) {
+                userGuidePanel.classList.remove('open');
+            }
+        });
+
+        // Initialize view mode
+        setViewMode(currentViewMode);
+
         // Initialize app after authentication
-        function initApp() {
-            connectClient();
+        async function initApp() {
             loadDocuments();
+            startIdleCheck();
+
+            // Load sessions first
+            try {
+                const res = await fetch('/api/sessions', {
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
+                const data = await res.json();
+                sessions = data.sessions || [];
+
+                // If there are existing sessions, use the most recent one
+                if (sessions.length > 0) {
+                    currentSessionId = sessions[0].id;
+                    console.log('Using existing session:', currentSessionId);
+                }
+
+                renderSidebarSessions();
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+            }
+
+            // Connect to client WebSocket if we have a session
+            if (currentSessionId) {
+                await connectClient();
+            }
         }
 
         // Start authentication flow on page load
