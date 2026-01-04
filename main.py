@@ -377,10 +377,10 @@ session_manager = SessionManager()
 
 # Global periodic tasks
 async def global_periodic_question_detection():
-    """Check for questions every 4 seconds using GPT for all active sessions"""
+    """Check for questions every 2 seconds using GPT for all active sessions"""
     logger.info("✓ Global periodic question detection started")
     while True:
-        await asyncio.sleep(4)
+        await asyncio.sleep(2)
         # Process each active session independently
         for session_id, state in list(session_manager._sessions.items()):
             # Skip temporary sessions (they start with "temp_")
