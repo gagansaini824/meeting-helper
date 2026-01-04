@@ -962,83 +962,101 @@
         .type-insight { color: #fbbf24; }
         .type-action { color: #34d399; }
 
-        /* Manual Question Input */
-        .question-input-container {
-            padding: 0;
-            border-top: 1px solid var(--border);
-            background: var(--bg-secondary);
-        }
-
-        .question-input-toggle {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background: transparent;
+        /* Manual Question Input - Inline */
+        .add-question-btn {
+            margin-left: auto;
+            background: var(--accent);
             border: none;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
+            border-radius: 0.25rem;
+            padding: 0.25rem;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: center;
             transition: all 0.2s;
         }
 
-        .question-input-toggle:hover {
-            color: var(--text-primary);
-            background: var(--bg-tertiary);
+        .add-question-btn:hover {
+            background: var(--accent-hover);
+            transform: scale(1.1);
         }
 
-        .question-input-box {
+        .add-question-btn svg {
+            stroke: white;
+            width: 14px;
+            height: 14px;
+        }
+
+        .manual-question-inline {
             display: flex;
             gap: 0.5rem;
-            padding: 0 1rem 1rem 1rem;
+            padding: 0.5rem 0;
+            align-items: center;
         }
 
-        .question-input-box.hidden {
+        .manual-question-inline.hidden {
             display: none;
         }
 
-        .question-input-box input {
+        .manual-question-inline input {
             flex: 1;
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
             border-radius: 0.5rem;
-            padding: 0.75rem;
+            padding: 0.5rem 0.75rem;
             color: var(--text-primary);
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
         }
 
-        .question-input-box input::placeholder {
+        .manual-question-inline input::placeholder {
             color: var(--text-secondary);
         }
 
-        .question-input-box input:focus {
+        .manual-question-inline input:focus {
             outline: none;
             border-color: var(--accent);
         }
 
-        .question-input-box button {
+        .manual-question-inline button#askManualQuestion {
             background: var(--accent);
             color: white;
             border: none;
             border-radius: 0.5rem;
-            padding: 0.75rem 1.25rem;
+            padding: 0.5rem 1rem;
             cursor: pointer;
             font-weight: 500;
+            font-size: 0.75rem;
             transition: all 0.2s;
         }
 
-        .question-input-box button:hover {
+        .manual-question-inline button#askManualQuestion:hover {
             background: #5558e3;
         }
 
-        .question-input-box button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .cancel-question-btn {
+            background: transparent;
+            border: none;
+            padding: 0.25rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.6;
+            transition: opacity 0.2s;
         }
 
-        
+        .cancel-question-btn:hover {
+            opacity: 1;
+        }
+
+        .cancel-question-btn svg {
+            stroke: var(--text-secondary);
+            width: 16px;
+            height: 16px;
+        }
+
+
         /* Answer panel */
         .answer-panel {
             background: rgba(99, 102, 241, 0.1);
@@ -2248,6 +2266,22 @@
                         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                     </svg>
                     LIVE QUESTION DETECTED
+                    <button class="add-question-btn" id="addQuestionBtn" title="Ask a question manually">
+                        <svg class="icon-xs" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="manual-question-inline hidden" id="manualQuestionInline">
+                    <input type="text" id="manualQuestionInput" placeholder="Type your question...">
+                    <button id="askManualQuestion">Ask</button>
+                    <button class="cancel-question-btn" id="cancelQuestionBtn">
+                        <svg class="icon-xs" viewBox="0 0 24 24">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
                 <div id="questionsList"></div>
             </div>
@@ -2261,20 +2295,6 @@
                     SUGGESTED TOPICS
                 </div>
                 <div id="suggestionsList"></div>
-            </div>
-
-            <!-- Manual Question Input -->
-            <div class="question-input-container">
-                <button class="question-input-toggle" id="questionInputToggle">
-                    <svg class="icon-xs" viewBox="0 0 24 24" id="toggleChevron">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                    Ask a question manually
-                </button>
-                <div class="question-input-box hidden" id="questionInputBox">
-                    <input type="text" id="manualQuestionInput" placeholder="Type a question and press Enter or click Ask...">
-                    <button id="askManualQuestion">Ask</button>
-                </div>
             </div>
 
             <!-- Answer Panel -->
@@ -3392,41 +3412,39 @@
             }
         };
 
-        // Manual question input
+        // Manual question input - inline
         const manualQuestionInput = document.getElementById('manualQuestionInput');
         const askManualQuestionBtn = document.getElementById('askManualQuestion');
-        const questionInputToggle = document.getElementById('questionInputToggle');
-        const questionInputBox = document.getElementById('questionInputBox');
-        const toggleChevron = document.getElementById('toggleChevron');
-        let questionInputVisible = false;
+        const addQuestionBtn = document.getElementById('addQuestionBtn');
+        const manualQuestionInline = document.getElementById('manualQuestionInline');
+        const cancelQuestionBtn = document.getElementById('cancelQuestionBtn');
 
-        questionInputToggle.onclick = () => {
-            questionInputVisible = !questionInputVisible;
-            questionInputBox.classList.toggle('hidden', !questionInputVisible);
+        function showManualQuestionInput() {
+            manualQuestionInline.classList.remove('hidden');
+            addQuestionBtn.style.display = 'none';
+            manualQuestionInput.focus();
+        }
 
-            if (questionInputVisible) {
-                toggleChevron.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
-                manualQuestionInput.focus();
-            } else {
-                toggleChevron.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
-            }
-        };
+        function hideManualQuestionInput() {
+            manualQuestionInline.classList.add('hidden');
+            addQuestionBtn.style.display = 'flex';
+            manualQuestionInput.value = '';
+        }
+
+        addQuestionBtn.onclick = showManualQuestionInput;
+        cancelQuestionBtn.onclick = hideManualQuestionInput;
 
         function submitManualQuestion() {
             const question = manualQuestionInput.value.trim();
             if (question) {
                 askQuestion(question);
-                manualQuestionInput.value = '';
+                hideManualQuestionInput();
             }
         }
 
         function editQuestion(questionText) {
-            // Expand the manual question input if hidden
-            if (!questionInputVisible) {
-                questionInputVisible = true;
-                questionInputBox.classList.remove('hidden');
-                toggleChevron.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
-            }
+            // Show the manual question input
+            showManualQuestionInput();
             // Paste the question into the input
             manualQuestionInput.value = questionText;
             manualQuestionInput.focus();
@@ -3439,6 +3457,13 @@
         manualQuestionInput.onkeypress = (e) => {
             if (e.key === 'Enter') {
                 submitManualQuestion();
+            }
+        };
+
+        // Escape key to cancel
+        manualQuestionInput.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                hideManualQuestionInput();
             }
         };
 
