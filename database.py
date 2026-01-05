@@ -82,51 +82,67 @@ class UserSettings(Base):
 
 
 class Document(Base):
-    """User's uploaded documents"""
+    """User's uploaded documents - metadata only, content stored in Pinecone"""
     __tablename__ = "documents"
 
     id = Column(String(255), primary_key=True)
     user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(500), nullable=False)
-    content = Column(Text, nullable=False)
-    content_type = Column(String(100), nullable=True)
+    file_type = Column(String(100), nullable=True)
     size_bytes = Column(Integer, default=0)
+    chunk_count = Column(Integer, default=0)
+    pinecone_namespace = Column(String(255), nullable=True)  # Usually user_id
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
     owner = relationship("User", back_populates="documents")
-    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+    sessions = relationship("DocumentSession", back_populates="document", cascade="all, delete-orphan")
 
 
-class DocumentChunk(Base):
-    """Document chunks stored in PostgreSQL (embeddings stored in Pinecone)"""
-    __tablename__ = "document_chunks"
+class DocumentSession(Base):
+    """Junction table linking documents to sessions (many-to-many)"""
+    __tablename__ = "document_sessions"
 
-    id = Column(String(255), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     document_id = Column(String(255), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
-    content = Column(Text, nullable=False)
-    chunk_index = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    session_id = Column(String(255), ForeignKey("meeting_sessions.id", ondelete="CASCADE"), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    document = relationship("Document", back_populates="chunks")
+    document = relationship("Document", back_populates="sessions")
+    session = relationship("MeetingSession", back_populates="document_links")
 
 
 class MeetingSession(Base):
-    """User's meeting sessions with transcripts"""
+    """User's interview/meeting sessions with transcripts, questions, and answers"""
     __tablename__ = "meeting_sessions"
 
     id = Column(String(255), primary_key=True)
     user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(500), nullable=True)
-    transcript = Column(Text, default="")
-    questions = Column(JSON, default=list)  # List of detected questions
-    started_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(50), default="active")  # active, archived
+
+    # JSONB fields for flexible data storage
+    transcript_entries = Column(JSON, default=list)  # [{speaker: int, text: str, timestamp: str, is_final: bool}]
+    detected_questions = Column(JSON, default=list)  # [{text: str, timestamp: str, answered: bool}]
+    answers = Column(JSON, default=list)  # [{question: str, answer: str, timestamp: str, sources: []}]
+    document_ids = Column(JSON, default=list)  # [doc_id, ...] - documents used in this session
+    conversation_summaries = Column(JSON, default=list)  # [{timestamp: str, summary: str, transcript_length: int}]
+
+    # Custom system prompt for this session (appended to default prompt)
+    system_prompt = Column(Text, default="")
+
+    # Full transcript text for easy search
+    full_transcript = Column(Text, default="")
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
-    duration_seconds = Column(Integer, default=0)
 
     # Relationships
     user = relationship("User", back_populates="meeting_sessions")
+    document_links = relationship("DocumentSession", back_populates="session", cascade="all, delete-orphan")
 
 
 class UsageRecord(Base):
@@ -135,6 +151,7 @@ class UsageRecord(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(String(255), ForeignKey("meeting_sessions.id", ondelete="SET NULL"), nullable=True)
     service = Column(String(50), nullable=False)  # deepgram, openai, anthropic
     operation = Column(String(100), nullable=False)  # transcription, embedding, completion
     tokens = Column(Integer, default=0)
@@ -143,6 +160,7 @@ class UsageRecord(Base):
 
     # Relationships
     user = relationship("User", back_populates="usage_records")
+    session = relationship("MeetingSession")
 
 
 class AuditLog(Base):
@@ -213,7 +231,82 @@ class DatabaseManager:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+        # Run migrations for meeting_sessions table
+        await self._migrate_meeting_sessions()
+
         print("Database initialized: PostgreSQL")
+
+    async def _migrate_meeting_sessions(self):
+        """Add new columns to meeting_sessions if they don't exist"""
+        migrations = [
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS transcript_entries JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS detected_questions JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS answers JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS document_ids JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS full_transcript TEXT DEFAULT ''",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS conversation_summaries JSON DEFAULT '[]'::json",
+            "ALTER TABLE meeting_sessions ADD COLUMN IF NOT EXISTS system_prompt TEXT DEFAULT ''"
+        ]
+
+        async with self._engine.begin() as conn:
+            for migration in migrations:
+                try:
+                    await conn.execute(text(migration))
+                except Exception as e:
+                    # Column might already exist or other issue, log but continue
+                    print(f"Migration note: {e}")
+
+        # Run schema optimization migrations
+        await self._migrate_schema_v2()
+
+    async def _migrate_schema_v2(self):
+        """
+        Schema optimization v2:
+        - documents: remove content column, add chunk_count, pinecone_namespace, file_type
+        - Drop document_chunks table (content stored in Pinecone only)
+        - Add document_sessions junction table
+        - Add session_id to usage_records
+        """
+        migrations = [
+            # Documents table changes
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_type VARCHAR(100)",
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_count INTEGER DEFAULT 0",
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS pinecone_namespace VARCHAR(255)",
+
+            # Drop the old content column if it exists (data now in Pinecone only)
+            "ALTER TABLE documents DROP COLUMN IF EXISTS content",
+            "ALTER TABLE documents DROP COLUMN IF EXISTS content_type",
+
+            # Drop document_chunks table (all chunk data in Pinecone)
+            "DROP TABLE IF EXISTS document_chunks CASCADE",
+
+            # Create document_sessions junction table
+            """CREATE TABLE IF NOT EXISTS document_sessions (
+                id SERIAL PRIMARY KEY,
+                document_id VARCHAR(255) NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                session_id VARCHAR(255) NOT NULL REFERENCES meeting_sessions(id) ON DELETE CASCADE,
+                added_at TIMESTAMP DEFAULT NOW()
+            )""",
+
+            # Add index for efficient lookups
+            "CREATE INDEX IF NOT EXISTS idx_document_sessions_document ON document_sessions(document_id)",
+            "CREATE INDEX IF NOT EXISTS idx_document_sessions_session ON document_sessions(session_id)",
+
+            # Add session_id to usage_records
+            "ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS session_id VARCHAR(255) REFERENCES meeting_sessions(id) ON DELETE SET NULL"
+        ]
+
+        async with self._engine.begin() as conn:
+            for migration in migrations:
+                try:
+                    await conn.execute(text(migration))
+                except Exception as e:
+                    # Table/column might already exist or other issue
+                    print(f"Schema v2 migration note: {e}")
 
     @property
     def is_postgres(self) -> bool:
@@ -307,12 +400,14 @@ async def log_usage(
     service: str,
     operation: str,
     tokens: int = 0,
-    cost_cents: int = 0
+    cost_cents: int = 0,
+    session_id: Optional[str] = None
 ):
-    """Log API usage for a user"""
+    """Log API usage for a user, optionally tied to a session"""
     async with db.session() as session:
         record = UsageRecord(
             user_id=user_id,
+            session_id=session_id,
             service=service,
             operation=operation,
             tokens=tokens,
@@ -352,15 +447,27 @@ async def save_document_to_db(
     user_id: str,
     doc_id: str,
     name: str,
-    content: str,
-    chunks: List[dict]
+    file_type: str,
+    size_bytes: int,
+    chunk_count: int,
+    session_id: str,
+    pinecone_namespace: Optional[str] = None
 ) -> Document:
     """
-    Save a document and its chunks to the database.
-    Note: Embeddings are stored in Pinecone, not PostgreSQL.
+    Save document metadata to the database.
+    Note: Document content and embeddings are stored in Pinecone, not PostgreSQL.
+
+    Args:
+        user_id: User's unique identifier
+        doc_id: Unique document ID
+        name: Document display name
+        file_type: File type (pdf, docx, etc.)
+        size_bytes: File size in bytes
+        chunk_count: Number of chunks in Pinecone
+        session_id: Session where document was uploaded
+        pinecone_namespace: Pinecone namespace (defaults to user_id)
     """
     from sqlalchemy import select
-    import uuid
 
     async with db.session() as session:
         # Create or update document
@@ -374,56 +481,114 @@ async def save_document_to_db(
                 id=doc_id,
                 user_id=user_id,
                 name=name,
-                content=content,
-                size_bytes=len(content.encode('utf-8'))
+                file_type=file_type,
+                size_bytes=size_bytes,
+                chunk_count=chunk_count,
+                pinecone_namespace=pinecone_namespace or user_id
             )
             session.add(doc)
+            await session.flush()  # Get the doc ID before creating link
 
-        # Add chunks (embeddings stored in Pinecone separately)
-        for i, chunk_data in enumerate(chunks):
-            chunk_id = str(uuid.uuid4())
-            chunk = DocumentChunk(
-                id=chunk_id,
-                document_id=doc_id,
-                content=chunk_data["content"],
-                chunk_index=i
-            )
-            session.add(chunk)
+        # Create document-session link
+        doc_session = DocumentSession(
+            document_id=doc_id,
+            session_id=session_id
+        )
+        session.add(doc_session)
 
         await session.commit()
         return doc
 
 
-async def get_user_documents(user_id: str) -> List[dict]:
-    """Get all documents for a user"""
-    from sqlalchemy import select, func
+async def get_user_documents(user_id: str, session_id: Optional[str] = None) -> List[dict]:
+    """
+    Get all documents for a user, optionally filtered by session.
+
+    Args:
+        user_id: User's unique identifier
+        session_id: Optional session ID to filter documents
+    """
+    from sqlalchemy import select
 
     async with db.session() as session:
-        # Get documents with chunk counts
-        query = select(
-            Document,
-            func.count(DocumentChunk.id).label("chunk_count")
-        ).outerjoin(DocumentChunk).where(
-            Document.user_id == user_id
-        ).group_by(Document.id)
+        if session_id:
+            # Get documents for a specific session via junction table
+            query = select(Document).join(DocumentSession).where(
+                Document.user_id == user_id,
+                DocumentSession.session_id == session_id
+            )
+        else:
+            # Get all user documents
+            query = select(Document).where(Document.user_id == user_id)
 
         result = await session.execute(query)
-        rows = result.fetchall()
+        docs = result.scalars().all()
 
         return [
             {
                 "id": doc.id,
                 "name": doc.name,
+                "file_type": doc.file_type,
                 "created_at": doc.created_at.isoformat(),
                 "size_bytes": doc.size_bytes,
-                "chunk_count": chunk_count
+                "chunk_count": doc.chunk_count,
+                "pinecone_namespace": doc.pinecone_namespace
             }
-            for doc, chunk_count in rows
+            for doc in docs
         ]
 
 
+async def get_session_documents(session_id: str) -> List[dict]:
+    """Get all documents linked to a specific session"""
+    from sqlalchemy import select
+
+    async with db.session() as session:
+        query = select(Document).join(DocumentSession).where(
+            DocumentSession.session_id == session_id
+        )
+        result = await session.execute(query)
+        docs = result.scalars().all()
+
+        return [
+            {
+                "id": doc.id,
+                "name": doc.name,
+                "file_type": doc.file_type,
+                "created_at": doc.created_at.isoformat(),
+                "size_bytes": doc.size_bytes,
+                "chunk_count": doc.chunk_count
+            }
+            for doc in docs
+        ]
+
+
+async def link_document_to_session(document_id: str, session_id: str) -> bool:
+    """Link an existing document to a session (for reusing documents across sessions)"""
+    from sqlalchemy import select
+
+    async with db.session() as session:
+        # Check if link already exists
+        result = await session.execute(
+            select(DocumentSession).where(
+                DocumentSession.document_id == document_id,
+                DocumentSession.session_id == session_id
+            )
+        )
+        if result.scalar_one_or_none():
+            return True  # Already linked
+
+        # Create new link
+        doc_session = DocumentSession(
+            document_id=document_id,
+            session_id=session_id
+        )
+        session.add(doc_session)
+        await session.commit()
+        return True
+
+
 async def delete_document_from_db(user_id: str, doc_id: str) -> bool:
-    """Delete a document and its chunks"""
+    """Delete a document and its session links"""
     from sqlalchemy import select, delete
 
     async with db.session() as session:
@@ -439,9 +604,9 @@ async def delete_document_from_db(user_id: str, doc_id: str) -> bool:
         if not doc:
             return False
 
-        # Delete chunks first (cascade should handle this, but explicit is safer)
+        # Delete session links first (cascade should handle this, but explicit is safer)
         await session.execute(
-            delete(DocumentChunk).where(DocumentChunk.document_id == doc_id)
+            delete(DocumentSession).where(DocumentSession.document_id == doc_id)
         )
 
         # Delete document
@@ -451,3 +616,225 @@ async def delete_document_from_db(user_id: str, doc_id: str) -> bool:
 
         await session.commit()
         return True
+
+
+async def unlink_document_from_session(document_id: str, session_id: str) -> bool:
+    """Remove a document link from a session (document remains in other sessions)"""
+    from sqlalchemy import delete
+
+    async with db.session() as session:
+        await session.execute(
+            delete(DocumentSession).where(
+                DocumentSession.document_id == document_id,
+                DocumentSession.session_id == session_id
+            )
+        )
+        await session.commit()
+        return True
+
+
+# ============= Session Management Functions =============
+
+async def create_session(user_id: str, title: Optional[str] = None) -> MeetingSession:
+    """Create a new meeting session for a user"""
+    import uuid
+
+    session_id = str(uuid.uuid4())
+    if not title:
+        # Generate default title with date
+        title = f"Meeting {datetime.utcnow().strftime('%b %d, %Y %H:%M')}"
+
+    async with db.session() as session:
+        meeting_session = MeetingSession(
+            id=session_id,
+            user_id=user_id,
+            title=title,
+            status="active",
+            transcript_entries=[],
+            detected_questions=[],
+            answers=[],
+            document_ids=[],
+            full_transcript=""
+        )
+        session.add(meeting_session)
+        await session.commit()
+        await session.refresh(meeting_session)
+        return meeting_session
+
+
+async def get_session(session_id: str, user_id: str) -> Optional[MeetingSession]:
+    """Get a session by ID, verifying ownership"""
+    from sqlalchemy import select
+
+    async with db.session() as session:
+        result = await session.execute(
+            select(MeetingSession).where(
+                MeetingSession.id == session_id,
+                MeetingSession.user_id == user_id
+            )
+        )
+        return result.scalar_one_or_none()
+
+
+async def get_user_sessions(user_id: str, include_archived: bool = False) -> List[dict]:
+    """Get all sessions for a user, ordered by most recent"""
+    from sqlalchemy import select, desc
+
+    async with db.session() as session:
+        query = select(MeetingSession).where(
+            MeetingSession.user_id == user_id
+        )
+
+        if not include_archived:
+            query = query.where(MeetingSession.status == "active")
+
+        query = query.order_by(desc(MeetingSession.updated_at))
+
+        result = await session.execute(query)
+        sessions = result.scalars().all()
+
+        return [
+            {
+                "id": s.id,
+                "title": s.title,
+                "status": s.status,
+                "system_prompt": getattr(s, 'system_prompt', None) or "",
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+                "question_count": len(s.detected_questions) if s.detected_questions else 0,
+                "has_transcript": bool(s.full_transcript)
+            }
+            for s in sessions
+        ]
+
+
+async def update_session(
+    session_id: str,
+    user_id: str,
+    title: Optional[str] = None,
+    status: Optional[str] = None,
+    transcript_entries: Optional[list] = None,
+    detected_questions: Optional[list] = None,
+    answers: Optional[list] = None,
+    document_ids: Optional[list] = None,
+    full_transcript: Optional[str] = None,
+    conversation_summaries: Optional[list] = None,
+    system_prompt: Optional[str] = None,
+    ended_at: Optional[datetime] = None
+) -> Optional[MeetingSession]:
+    """Update a session's data"""
+    from sqlalchemy import select
+
+    async with db.session() as session:
+        result = await session.execute(
+            select(MeetingSession).where(
+                MeetingSession.id == session_id,
+                MeetingSession.user_id == user_id
+            )
+        )
+        meeting_session = result.scalar_one_or_none()
+
+        if not meeting_session:
+            return None
+
+        if title is not None:
+            meeting_session.title = title
+        if status is not None:
+            meeting_session.status = status
+        if transcript_entries is not None:
+            meeting_session.transcript_entries = transcript_entries
+        if detected_questions is not None:
+            meeting_session.detected_questions = detected_questions
+        if answers is not None:
+            meeting_session.answers = answers
+        if document_ids is not None:
+            meeting_session.document_ids = document_ids
+        if full_transcript is not None:
+            meeting_session.full_transcript = full_transcript
+        if conversation_summaries is not None:
+            meeting_session.conversation_summaries = conversation_summaries
+        if system_prompt is not None:
+            meeting_session.system_prompt = system_prompt
+        if ended_at is not None:
+            meeting_session.ended_at = ended_at
+
+        meeting_session.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(meeting_session)
+        return meeting_session
+
+
+async def append_to_session(
+    session_id: str,
+    user_id: str,
+    transcript_entry: Optional[dict] = None,
+    question: Optional[dict] = None,
+    answer: Optional[dict] = None,
+    append_transcript_text: Optional[str] = None
+) -> bool:
+    """Append data to a session (for real-time updates)"""
+    from sqlalchemy import select
+
+    async with db.session() as session:
+        result = await session.execute(
+            select(MeetingSession).where(
+                MeetingSession.id == session_id,
+                MeetingSession.user_id == user_id
+            )
+        )
+        meeting_session = result.scalar_one_or_none()
+
+        if not meeting_session:
+            return False
+
+        if transcript_entry:
+            entries = meeting_session.transcript_entries or []
+            entries.append(transcript_entry)
+            meeting_session.transcript_entries = entries
+
+        if question:
+            questions = meeting_session.detected_questions or []
+            questions.append(question)
+            meeting_session.detected_questions = questions
+
+        if answer:
+            answers = meeting_session.answers or []
+            answers.append(answer)
+            meeting_session.answers = answers
+
+        if append_transcript_text:
+            meeting_session.full_transcript = (meeting_session.full_transcript or "") + append_transcript_text
+
+        meeting_session.updated_at = datetime.utcnow()
+        await session.commit()
+        return True
+
+
+async def delete_session(session_id: str, user_id: str) -> bool:
+    """Delete a session"""
+    from sqlalchemy import select, delete as sql_delete
+
+    async with db.session() as session:
+        # Verify ownership
+        result = await session.execute(
+            select(MeetingSession).where(
+                MeetingSession.id == session_id,
+                MeetingSession.user_id == user_id
+            )
+        )
+        meeting_session = result.scalar_one_or_none()
+
+        if not meeting_session:
+            return False
+
+        await session.execute(
+            sql_delete(MeetingSession).where(MeetingSession.id == session_id)
+        )
+        await session.commit()
+        return True
+
+
+async def archive_session(session_id: str, user_id: str) -> bool:
+    """Archive a session instead of deleting"""
+    result = await update_session(session_id, user_id, status="archived", ended_at=datetime.utcnow())
+    return result is not None
