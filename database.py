@@ -642,7 +642,7 @@ async def create_session(user_id: str, title: Optional[str] = None) -> MeetingSe
     session_id = str(uuid.uuid4())
     if not title:
         # Generate default title with date
-        title = f"Interview {datetime.utcnow().strftime('%b %d, %Y %H:%M')}"
+        title = f"Meeting {datetime.utcnow().strftime('%b %d, %Y %H:%M')}"
 
     async with db.session() as session:
         meeting_session = MeetingSession(

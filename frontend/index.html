@@ -3772,6 +3772,11 @@
                         <div class="sidebar-session-meta">${s.question_count || 0} questions · ${formatSessionDate(s.updated_at)}</div>
                     </div>
                     <div class="sidebar-session-actions">
+                        <button class="sidebar-action-btn" onclick="event.stopPropagation(); renameSession('${s.id}', '${escapeHtml(s.title).replace(/'/g, "\\'")}')" title="Rename session">
+                            <svg class="icon-xs" viewBox="0 0 24 24">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
                         <button class="sidebar-action-btn" onclick="event.stopPropagation(); clearSessionData('${s.id}')" title="Clear session data">
                             <svg class="icon-xs" viewBox="0 0 24 24">
                                 <path d="M3 6h18"/>
@@ -3949,6 +3954,39 @@
                 }
             } catch (error) {
                 console.error('Failed to delete session:', error);
+            }
+        }
+
+        async function renameSession(sessionId, currentTitle) {
+            const newTitle = prompt('Enter new session name:', currentTitle);
+            if (!newTitle || newTitle === currentTitle) return;
+
+            try {
+                const res = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
+                    body: JSON.stringify({ title: newTitle })
+                });
+
+                if (res.ok) {
+                    // Update the session in the local sessions array
+                    const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+                    if (sessionIndex !== -1) {
+                        sessions[sessionIndex].title = newTitle;
+                    }
+                    // Re-render the sidebar to show the new title
+                    renderSidebarSessions();
+                    console.log('Session renamed successfully');
+                } else {
+                    console.error('Failed to rename session:', res.status);
+                    alert('Failed to rename session');
+                }
+            } catch (error) {
+                console.error('Failed to rename session:', error);
+                alert('Failed to rename session');
             }
         }
 
